@@ -1,0 +1,45 @@
+## IDE / tooling
+.cursor/
+.vscode/
+.expo/
+.stack/
+.docker/
+
+## Android / mobile
+.android/
+
+## Packet Tracer
+Cisco Packet Tracer 8.2.2/
+Cisco Packet Tracer 9.0.0/
+
+## OS- / user-level folders we do NOT want in the repo
+AppData/
+Contacts/
+Downloads/
+Favorites/
+Links/
+Music/
+Saved Games/
+Searches/
+Videos/
+
+## Shell / history / misc
+.bash_history
+.bash_profile
+.bashrc
+.lesshst
+.wget-hsts
+.rediscli_history
+
+## Windows user hive files
+NTUSER.DAT
+NTUSER.DAT*
+ntuser.dat*
+
+## Python / node artifacts
+__pycache__/
+*.pyc
+node_modules/
+dist/
+build/
+
