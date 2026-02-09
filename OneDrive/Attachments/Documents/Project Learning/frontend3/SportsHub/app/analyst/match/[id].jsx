@@ -7,6 +7,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Platform,
+  Dimensions,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Picker } from "@react-native-picker/picker";
@@ -14,21 +15,20 @@ import { Picker } from "@react-native-picker/picker";
 import { API, WS_URL, ngrokHeaders } from "../../../lib/config";
 import { getToken, clearToken } from "../../../lib/auth";
 import MatchTimer from "../../../components/MatchTimer";
-import AppHeader from "../../../components/AppHeader";
 import AppLayout from "../../../components/AppLayout";
-import ChatBubble from "../../../components/ChatBubble";
+import PitchVisualization from "../../../components/PitchVisualization";
 
 const EVENTS = [
-  { key: "shots_on_target", label: "Shots on Target", icon: "🎯", color: "#10b981", bg: "#d1fae5" },
-  { key: "shots_off_target", label: "Shots off Target", icon: "⚽", color: "#f59e0b", bg: "#fef3c7" },
-  { key: "key_passes", label: "Key Passes", icon: "🔑", color: "#3b82f6", bg: "#dbeafe" },
-  { key: "duels_won", label: "Duels Won", icon: "💪", color: "#22c55e", bg: "#dcfce7" },
-  { key: "duels_lost", label: "Duels Lost", icon: "❌", color: "#ef4444", bg: "#fee2e2" },
-  { key: "fouls", label: "Fouls", icon: "⚠️", color: "#f97316", bg: "#ffedd5" },
-  { key: "interceptions", label: "Interceptions", icon: "🛡️", color: "#8b5cf6", bg: "#ede9fe" },
-  { key: "blocks", label: "Blocks", icon: "🚫", color: "#6366f1", bg: "#e0e7ff" },
-  { key: "tackles", label: "Tackles", icon: "⚔️", color: "#06b6d4", bg: "#cffafe" },
-  { key: "clearances", label: "Clearances", icon: "🧹", color: "#84cc16", bg: "#ecfccb" },
+  { key: "shots_on_target", label: "Shots on Target" },
+  { key: "shots_off_target", label: "Shots off Target" },
+  { key: "key_passes", label: "Key Passes" },
+  { key: "duels_won", label: "Duels Won" },
+  { key: "duels_lost", label: "Duels Lost" },
+  { key: "fouls", label: "Fouls" },
+  { key: "interceptions", label: "Interceptions" },
+  { key: "blocks", label: "Blocks" },
+  { key: "tackles", label: "Tackles" },
+  { key: "clearances", label: "Clearances" },
 ];
 
 const PITCH_ZONES = [
@@ -43,6 +43,8 @@ const PITCH_ZONES = [
 export default function AnalystMatchDashboard() {
   const params = useLocalSearchParams();
   const matchId = String(params?.id || "").trim();
+  const screenW = Dimensions.get("window").width;
+  const isCompactPhone = Platform.OS !== "web" && screenW < 420;
 
   const [token, setToken] = useState(null);
   const [players, setPlayers] = useState([]);
@@ -52,7 +54,6 @@ export default function AnalystMatchDashboard() {
   const [selectedEvent, setSelectedEvent] = useState("");
   const [selectedPlayer, setSelectedPlayer] = useState("");
   const [selectedZone, setSelectedZone] = useState(null);
-  const [recordingFor, setRecordingFor] = useState("team");
   const [goalsScored, setGoalsScored] = useState(0);
   const [goalsConceded, setGoalsConceded] = useState(0);
   const [wsStatus, setWsStatus] = useState("Offline");
@@ -62,6 +63,7 @@ export default function AnalystMatchDashboard() {
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [liveSuggestions, setLiveSuggestions] = useState([]);
   const [userRole, setUserRole] = useState(null);
+  const [teamName, setTeamName] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -79,6 +81,19 @@ export default function AnalystMatchDashboard() {
         }
       } catch (e) {
         console.log("Error loading user:", e);
+      }
+
+      // Load team name (for clear goal labels)
+      try {
+        const teamRes = await fetch(`${API}/stats/`, {
+          headers: { Authorization: `Bearer ${t}`, ...ngrokHeaders() },
+        });
+        if (teamRes.ok) {
+          const teamJson = await teamRes.json().catch(() => ({}));
+          if (teamJson?.team?.team_name) setTeamName(teamJson.team.team_name);
+        }
+      } catch (e) {
+        console.log("Error loading team name:", e);
       }
     })();
   }, []);
@@ -218,6 +233,29 @@ export default function AnalystMatchDashboard() {
 
   const playerNames = useMemo(() => (players || []).map((p) => p.name), [players]);
 
+  const zoneIdToNum = useMemo(
+    () => ({
+      defensive_left: "1",
+      defensive_center: "2",
+      defensive_right: "3",
+      attacking_left: "4",
+      attacking_center: "5",
+      attacking_right: "6",
+    }),
+    []
+  );
+  const zoneNumToId = useMemo(
+    () => ({
+      "1": "defensive_left",
+      "2": "defensive_center",
+      "3": "defensive_right",
+      "4": "attacking_left",
+      "5": "attacking_center",
+      "6": "attacking_right",
+    }),
+    []
+  );
+
   const submitEvent = async () => {
     setMessage("");
 
@@ -236,109 +274,50 @@ export default function AnalystMatchDashboard() {
       return;
     }
 
-    if (recordingFor === "team") {
-      if (!selectedEvent || !selectedPlayer || !selectedZone) {
-        setMessage("Select event, player & zone");
+    if (!selectedEvent || !selectedPlayer || !selectedZone) {
+      setMessage("Select event, player & zone");
+      return;
+    }
+
+    const url = `${API}/matches/${matchId}/${selectedEvent}/${encodeURIComponent(selectedPlayer)}/increment/`;
+
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          ...ngrokHeaders(),
+        },
+        body: JSON.stringify({
+          zone: selectedZone,
+          second: elapsedSeconds,
+        }),
+      });
+
+      const raw = await res.text();
+      let json = {};
+      try {
+        json = JSON.parse(raw);
+      } catch {}
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          setMessage("Unauthorized");
+          await clearToken();
+          router.replace("/");
+          return;
+        }
+        setMessage(json?.detail || "Error recording event");
         return;
       }
 
-      const url = `${API}/matches/${matchId}/${selectedEvent}/${encodeURIComponent(selectedPlayer)}/increment/`;
-
-      try {
-        const res = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-            ...ngrokHeaders(),
-          },
-          body: JSON.stringify({ 
-            zone: selectedZone,
-            second: elapsedSeconds,
-          }),
-        });
-
-        const raw = await res.text();
-        let json = {};
-        try {
-          json = JSON.parse(raw);
-        } catch {}
-
-        if (!res.ok) {
-          if (res.status === 401) {
-            setMessage("Unauthorized");
-            await clearToken();
-            router.replace("/");
-            return;
-          }
-          setMessage(json?.detail || "Error recording event");
-          return;
-        }
-
-        setMessage(`✓ ${selectedEvent} recorded for ${selectedPlayer}`);
-        setSelectedZone(null);
-        setSelectedEvent("");
-      } catch (err) {
-        console.log("Fetch error:", err);
-        setMessage("Server connection failed");
-      }
-    } else {
-      if (!selectedEvent) {
-        setMessage("Select event");
-        return;
-      }
-
-      const url = `${API}/matches/${matchId}/opposition/`;
-
-      try {
-        const getRes = await fetch(`${API}/matches/${matchId}/opposition/`, {
-          headers: { Authorization: `Bearer ${token}`, ...ngrokHeaders() },
-        });
-        let currentCount = 0;
-        if (getRes.ok) {
-          const oppStats = await getRes.json().catch(() => []);
-          const existing = oppStats.find((s) => s.event === selectedEvent);
-          if (existing) {
-            currentCount = existing.count || 0;
-          }
-        }
-
-        const res = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-            ...ngrokHeaders(),
-          },
-          body: JSON.stringify({ 
-            event: selectedEvent,
-            count: currentCount + 1,
-          }),
-        });
-
-        const raw = await res.text();
-        let json = {};
-        try {
-          json = JSON.parse(raw);
-        } catch {}
-
-        if (!res.ok) {
-          if (res.status === 401) {
-            setMessage("Unauthorized");
-            await clearToken();
-            router.replace("/");
-            return;
-          }
-          setMessage(json?.detail || "Error recording opposition event");
-          return;
-        }
-
-        setMessage(`✓ Opposition ${selectedEvent} recorded`);
-        setSelectedEvent("");
-      } catch (err) {
-        console.log("Fetch error:", err);
-        setMessage("Server connection failed");
-      }
+      setMessage(`Recorded: ${selectedEvent.replace(/_/g, " ")} • ${selectedPlayer} • Zone ${selectedZone}`);
+      setSelectedZone(null);
+      setSelectedEvent("");
+    } catch (err) {
+      console.log("Fetch error:", err);
+      setMessage("Server connection failed");
     }
   };
 
@@ -423,23 +402,14 @@ export default function AnalystMatchDashboard() {
   if (!token) return null;
 
   const selectedEventData = EVENTS.find(e => e.key === selectedEvent);
-  const isReadyToRecord = selectedEvent && (recordingFor === "opposition" || (selectedPlayer && selectedZone));
+  const isReadyToRecord = !!(selectedEvent && selectedPlayer && selectedZone);
+  const ourTeamLabel = teamName || "Our Team";
+  const opponentLabel = match?.opponent || "Opponent";
+  const selectedZoneId = selectedZone ? zoneNumToId[String(selectedZone)] : null;
 
   return (
     <AppLayout>
       <View style={styles.screen}>
-        {Platform.OS !== "web" && (
-          <AppHeader 
-            subtitle={
-              loadingMatch 
-                ? "Loading match…" 
-                : match 
-                ? `vs ${match.opponent}`
-                : `Match ID: ${matchId}`
-            } 
-          />
-        )}
-        
         {Platform.OS === "web" && (
           <View style={styles.webHeader}>
             <View style={styles.headerLeft}>
@@ -489,175 +459,158 @@ export default function AnalystMatchDashboard() {
           </View>
         )}
 
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Score Section - Prominent */}
+        <ScrollView
+          contentContainerStyle={[
+            styles.content,
+            Platform.OS !== "web" && styles.contentWithBottomBar,
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Score Section */}
           <View style={styles.scoreCard}>
             <View style={styles.scoreRow}>
               <View style={styles.scoreBox}>
-                <Text style={styles.scoreLabel}>Our Team</Text>
+                <Text style={styles.scoreLabel}>{ourTeamLabel}</Text>
                 <Text style={styles.scoreValue}>{goalsScored}</Text>
                 <TouchableOpacity 
                   style={[styles.goalButton, styles.goalButtonScored]} 
                   onPress={() => recordGoal("scored")}
                 >
-                  <Text style={styles.goalButtonText}>+ Goal</Text>
+                  <Text style={styles.goalButtonText}>Add goal</Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.scoreDividerContainer}>
                 <Text style={styles.scoreDivider}>-</Text>
               </View>
               <View style={styles.scoreBox}>
-                <Text style={styles.scoreLabel}>Opponent</Text>
+                <Text style={styles.scoreLabel}>{opponentLabel}</Text>
                 <Text style={styles.scoreValue}>{goalsConceded}</Text>
                 <TouchableOpacity 
                   style={[styles.goalButton, styles.goalButtonConceded]} 
                   onPress={() => recordGoal("conceded")}
                 >
-                  <Text style={styles.goalButtonText}>+ Goal</Text>
+                  <Text style={styles.goalButtonText}>Add goal</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </View>
 
-          {/* Recording Mode Toggle - Compact */}
-          <View style={styles.modeCard}>
-            <Text style={styles.sectionLabel}>Recording For</Text>
-            <View style={styles.modeRow}>
-              <TouchableOpacity
-                style={[styles.modeButton, recordingFor === "team" && styles.modeButtonActive]}
-                onPress={() => setRecordingFor("team")}
-              >
-                <Text style={[styles.modeButtonText, recordingFor === "team" && styles.modeButtonTextActive]}>
-                  Our Team
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modeButton, recordingFor === "opposition" && styles.modeButtonActive]}
-                onPress={() => setRecordingFor("opposition")}
-              >
-                <Text style={[styles.modeButtonText, recordingFor === "opposition" && styles.modeButtonTextActive]}>
-                  Opposition
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Event Selection - Visual Grid */}
+          {/* Event Selection */}
           <View style={styles.eventsCard}>
             <Text style={styles.sectionLabel}>Select Event Type</Text>
-            <View style={styles.eventsGrid}>
-              {EVENTS.map((event) => {
-                const isSelected = selectedEvent === event.key;
-                return (
-                  <TouchableOpacity
-                    key={event.key}
-                    style={[
-                      styles.eventButton,
-                      isSelected && { 
-                        backgroundColor: event.bg,
-                        borderColor: event.color,
-                        borderWidth: 2,
-                      }
-                    ]}
-                    onPress={() => setSelectedEvent(event.key)}
-                  >
-                    <Text style={styles.eventIcon}>{event.icon}</Text>
-                    <Text style={[
-                      styles.eventLabel,
-                      isSelected && { color: event.color, fontWeight: "700" }
-                    ]}>
-                      {event.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* Player Selection (Team only) */}
-          {recordingFor === "team" && (
-            <View style={styles.selectionCard}>
-              <Text style={styles.sectionLabel}>Select Player</Text>
-              {loadingPlayers ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="small" color="#2563eb" />
-                  <Text style={styles.loadingText}>Loading players...</Text>
-                </View>
-              ) : (
-                <View style={styles.pickerContainer}>
-                  <Picker
-                    selectedValue={selectedPlayer || ""}
-                    onValueChange={(v) => setSelectedPlayer(v)}
-                    style={styles.picker}
-                    itemStyle={styles.pickerItem}
-                  >
-                    <Picker.Item label={playerNames.length ? "Choose player..." : "No players available"} value="" />
-                    {playerNames.map((name) => (
-                      <Picker.Item key={name} label={name} value={name} />
-                    ))}
-                  </Picker>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* Pitch Zone Selection (Team only) */}
-          {recordingFor === "team" && (
-            <View style={styles.zoneCard}>
-              <Text style={styles.sectionLabel}>Select Pitch Zone</Text>
-              <View style={styles.zoneGrid}>
-                {PITCH_ZONES.map((zone) => {
-                  const isSelected = selectedZone === zone.id;
+            {isCompactPhone ? (
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={selectedEvent || ""}
+                  onValueChange={(v) => setSelectedEvent(v)}
+                  style={styles.picker}
+                  itemStyle={styles.pickerItem}
+                >
+                  <Picker.Item label="Choose event..." value="" />
+                  {EVENTS.map((e) => (
+                    <Picker.Item key={e.key} label={e.label} value={e.key} />
+                  ))}
+                </Picker>
+              </View>
+            ) : (
+              <View style={styles.eventsGrid}>
+                {EVENTS.map((event) => {
+                  const isSelected = selectedEvent === event.key;
                   return (
                     <TouchableOpacity
-                      key={zone.id}
+                      key={event.key}
                       style={[
-                        styles.zoneButton,
-                        isSelected && styles.zoneButtonActive
+                        styles.eventButton,
+                        isSelected && styles.eventButtonActive
                       ]}
-                      onPress={() => setSelectedZone(zone.id)}
+                      onPress={() => setSelectedEvent(event.key)}
                     >
-                      <Text style={[
-                        styles.zoneNumber,
-                        isSelected && styles.zoneNumberActive
-                      ]}>
-                        {zone.id}
-                      </Text>
-                      <Text style={[
-                        styles.zoneLabel,
-                        isSelected && styles.zoneLabelActive
-                      ]}>
-                        {zone.position}
+                      <View style={[styles.eventAccent, isSelected && styles.eventAccentActive]} />
+                      <Text style={[styles.eventLabel, isSelected && styles.eventLabelActive]}>
+                        {event.label}
                       </Text>
                     </TouchableOpacity>
                   );
                 })}
               </View>
-            </View>
-          )}
+            )}
+          </View>
 
-          {/* Record Button - Prominent */}
-          <TouchableOpacity 
-            style={[
-              styles.recordButton,
-              !isReadyToRecord && styles.recordButtonDisabled
-            ]} 
-            onPress={submitEvent}
-            disabled={!isReadyToRecord}
-          >
-            {selectedEventData ? (
-              <View style={styles.recordButtonContent}>
-                <Text style={styles.recordButtonIcon}>{selectedEventData.icon}</Text>
-                <Text style={styles.recordButtonText}>
-                  Record {selectedEventData.label}
-                  {recordingFor === "team" && selectedPlayer && ` • ${selectedPlayer}`}
-                  {recordingFor === "team" && selectedZone && ` • Zone ${selectedZone}`}
-                </Text>
+          {/* Player Selection */}
+          <View style={styles.selectionCard}>
+            <Text style={styles.sectionLabel}>Select Player</Text>
+            {loadingPlayers ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color="#2563eb" />
+                <Text style={styles.loadingText}>Loading players...</Text>
               </View>
             ) : (
-              <Text style={styles.recordButtonText}>Select event to record</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={selectedPlayer || ""}
+                  onValueChange={(v) => setSelectedPlayer(v)}
+                  style={styles.picker}
+                  itemStyle={styles.pickerItem}
+                >
+                  <Picker.Item label={playerNames.length ? "Choose player..." : "No players available"} value="" />
+                  {playerNames.map((name) => (
+                    <Picker.Item key={name} label={name} value={name} />
+                  ))}
+                </Picker>
+              </View>
             )}
-          </TouchableOpacity>
+          </View>
+
+          {/* Zone Selection (clickable pitch) */}
+          <View style={styles.zoneCard}>
+            <View style={styles.zoneHeaderRow}>
+              <Text style={styles.sectionLabel}>Select Pitch Zone</Text>
+              <Text style={styles.zoneSelectedText}>
+                {selectedZone ? `Selected: Zone ${selectedZone}` : "Tap a zone on the pitch"}
+              </Text>
+            </View>
+            <View style={styles.pitchWrapper}>
+              <PitchVisualization
+                width={Platform.OS === "web" ? Math.min(screenW - 80, 520) : screenW - 40}
+                height={Platform.OS === "web" ? 300 : 260}
+                heatMapData={null}
+                pitchColor="#0b8a5a"
+                pitchLineColor="#ffffff"
+                zoneFillColor="#10b981"
+                selectedZone={selectedZoneId}
+                onZoneClick={(zoneId) => {
+                  const zoneNum = zoneIdToNum[zoneId];
+                  if (zoneNum) setSelectedZone(zoneNum);
+                }}
+                events={[]}
+              />
+            </View>
+            <View style={styles.zoneLegend}>
+              <Text style={styles.zoneLegendText}>Zones 1 & 4: first third • Zones 2 & 5: middle third • Zones 3 & 6: final third</Text>
+            </View>
+          </View>
+
+          {/* Record button inside scroll for web (phone uses fixed bottom bar) */}
+          {Platform.OS === "web" && (
+            <TouchableOpacity 
+              style={[
+                styles.recordButton,
+                !isReadyToRecord && styles.recordButtonDisabled
+              ]} 
+              onPress={submitEvent}
+              disabled={!isReadyToRecord}
+            >
+              {selectedEventData ? (
+                <Text style={styles.recordButtonText}>
+                  Record {selectedEventData.label}
+                  {selectedPlayer ? ` • ${selectedPlayer}` : ""}
+                  {selectedZone ? ` • Zone ${selectedZone}` : ""}
+                </Text>
+              ) : (
+                <Text style={styles.recordButtonText}>Select event to record</Text>
+              )}
+            </TouchableOpacity>
+          )}
 
           {!!message && (
             <View style={[
@@ -710,7 +663,31 @@ export default function AnalystMatchDashboard() {
             </View>
           )}
         </ScrollView>
-        {userRole && Platform.OS !== "web" && <ChatBubble userRole={userRole} />}
+
+        {/* Fixed bottom action bar for phone */}
+        {Platform.OS !== "web" && (
+          <View style={styles.bottomBar}>
+            <TouchableOpacity
+              style={[
+                styles.recordButton,
+                styles.recordButtonBottom,
+                !isReadyToRecord && styles.recordButtonDisabled,
+              ]}
+              onPress={submitEvent}
+              disabled={!isReadyToRecord}
+            >
+              {selectedEventData ? (
+                <Text style={styles.recordButtonText} numberOfLines={2}>
+                  Record {selectedEventData.label}
+                  {selectedPlayer ? ` • ${selectedPlayer}` : ""}
+                  {selectedZone ? ` • Zone ${selectedZone}` : ""}
+                </Text>
+              ) : (
+                <Text style={styles.recordButtonText}>Select event, player, and zone</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     </AppLayout>
   );
@@ -805,6 +782,9 @@ const styles = StyleSheet.create({
     padding: 20,
     gap: 16,
     paddingBottom: 40,
+  },
+  contentWithBottomBar: {
+    paddingBottom: 140,
   },
   scoreCard: {
     backgroundColor: "#ffffff",
@@ -942,25 +922,41 @@ const styles = StyleSheet.create({
   },
   eventButton: {
     flex: 1,
-    minWidth: Platform.OS === "web" ? 150 : "45%",
-    paddingVertical: 18,
-    paddingHorizontal: 12,
+    minWidth: Platform.OS === "web" ? 180 : "48%",
+    paddingVertical: 16,
+    paddingHorizontal: 14,
     borderRadius: 12,
     borderWidth: 2,
     borderColor: "#e5e7eb",
     backgroundColor: "#ffffff",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "center",
-    gap: 8,
+    flexDirection: "row",
+    gap: 10,
   },
-  eventIcon: {
-    fontSize: 28,
+  eventButtonActive: {
+    borderColor: "#0f172a",
+    backgroundColor: "#f8fafc",
+  },
+  eventAccent: {
+    width: 6,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: "#e5e7eb",
+    marginTop: 2,
+  },
+  eventAccentActive: {
+    backgroundColor: "#0f172a",
   },
   eventLabel: {
-    fontSize: 12,
-    fontWeight: "600",
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700",
     color: "#6b7280",
-    textAlign: "center",
+    lineHeight: 18,
+  },
+  eventLabelActive: {
+    color: "#0f172a",
   },
   selectionCard: {
     backgroundColor: "#ffffff",
@@ -1014,6 +1010,32 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 1,
   },
+  zoneHeaderRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 12,
+  },
+  zoneSelectedText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748b",
+  },
+  pitchWrapper: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  zoneLegend: {
+    marginTop: 10,
+  },
+  zoneLegendText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#64748b",
+    lineHeight: 16,
+    textAlign: "center",
+  },
   zoneGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1065,23 +1087,31 @@ const styles = StyleSheet.create({
     elevation: 6,
     marginTop: 8,
   },
+  recordButtonBottom: {
+    marginTop: 0,
+  },
   recordButtonDisabled: {
     backgroundColor: "#9ca3af",
     shadowOpacity: 0,
     elevation: 0,
   },
-  recordButtonContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  recordButtonIcon: {
-    fontSize: 24,
-  },
   recordButtonText: {
     color: "#ffffff",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
+    textAlign: "center",
+  },
+  bottomBar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    paddingTop: 10,
+    backgroundColor: "rgba(249, 250, 251, 0.95)",
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
   },
   messageContainer: {
     backgroundColor: "#eff6ff",

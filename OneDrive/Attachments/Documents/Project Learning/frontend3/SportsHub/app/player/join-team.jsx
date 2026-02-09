@@ -1,6 +1,6 @@
 // app/player/join-team.jsx - Player join team page
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Platform } from "react-native";
 import { router } from "expo-router";
 import AppHeader from "../../components/AppHeader";
 import { API, ngrokHeaders } from "../../lib/config";
@@ -120,7 +120,7 @@ export default function PlayerJoinTeam() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <AppHeader subtitle="Join Team" />
+        {Platform.OS === "web" && <AppHeader subtitle="Join Team" />}
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#0f172a" />
           <Text style={styles.loadingText}>Loading...</Text>
@@ -131,7 +131,7 @@ export default function PlayerJoinTeam() {
 
   return (
     <View style={styles.container}>
-      <AppHeader subtitle="Join Team" />
+      {Platform.OS === "web" && <AppHeader subtitle="Join Team" />}
       <ScrollView contentContainerStyle={styles.content}>
         {/* Current Team */}
         {currentTeam && (

@@ -6,30 +6,35 @@ import { usePathname, useRouter } from "expo-router";
 // Home page navigation (simplified)
 // Team Chat intentionally NOT here – it should be entered from Manager/Analyst sections only
 const HOME_NAV_ITEMS = [
-  { path: "/manager/dashboard", label: "Manager Section", icon: "⚙️", roles: ["manager", "analyst"] },
-  { path: "/analyst/dashboard", label: "Analyst Section", icon: "📋", roles: ["manager", "analyst"] },
-  { path: "/profile", label: "Profile", icon: "👤", roles: ["manager", "analyst", "player"] },
+  { path: "/manager/dashboard", label: "Manager Section", roles: ["manager", "analyst"] },
+  { path: "/analyst/dashboard", label: "Analyst Section", roles: ["manager", "analyst"] },
+  { path: "/player/stats", label: "Personal Stats", roles: ["player"] },
+  { path: "/profile", label: "Profile", roles: ["manager", "analyst", "player"] },
 ];
 
 // Manager section navigation (detailed)
 const MANAGER_NAV_ITEMS = [
-  { path: "/home", label: "Dashboard", icon: "🏠", roles: ["manager", "analyst", "player"] },
-  { path: "/manager/dashboard", label: "Manager Dashboard", icon: "⚙️", roles: ["manager"] },
-  { path: "/manager/current-match", label: "Live Match", icon: "●", roles: ["manager"] },
-  { path: "/manager/players", label: "Players", icon: "👥", roles: ["manager"] },
-  { path: "/manager/matches", label: "Matches", icon: "📅", roles: ["manager"] },
-  { path: "/messages", label: "Team Chat", icon: "💬", roles: ["manager", "analyst", "player"] },
-  { path: "/profile", label: "Profile", icon: "👤", roles: ["manager", "analyst", "player"] },
+  { path: "/manager/dashboard", label: "Manager Dashboard", roles: ["manager"] },
+  { path: "/manager/current-match", label: "Live Match", roles: ["manager"] },
+  { path: "/manager/players", label: "Players", roles: ["manager"] },
+  { path: "/manager/matches", label: "Matches", roles: ["manager"] },
+  { path: "/manager/messages", label: "Team Chat", roles: ["manager", "analyst", "player"] },
+  { path: "/profile", label: "Profile", roles: ["manager", "analyst", "player"] },
 ];
 
 // Analyst section navigation (detailed)
 const ANALYST_NAV_ITEMS = [
-  { path: "/home", label: "Dashboard", icon: "🏠", roles: ["manager", "analyst", "player"] },
-  { path: "/analyst/dashboard", label: "Analyst Dashboard", icon: "📋", roles: ["analyst"] },
-  { path: "/analyst/record-events", label: "Start New Match", icon: "⚽", roles: ["analyst"] },
-  { path: "/analyst/review-matches", label: "Review Matches", icon: "📝", roles: ["analyst"] },
-  { path: "/messages", label: "Team Chat", icon: "💬", roles: ["manager", "analyst", "player"] },
-  { path: "/profile", label: "Profile", icon: "👤", roles: ["manager", "analyst", "player"] },
+  { path: "/analyst/dashboard", label: "Analyst Dashboard", roles: ["analyst"] },
+  { path: "/analyst/record-events", label: "Start New Match", roles: ["analyst"] },
+  { path: "/analyst/review-matches", label: "Review Matches", roles: ["analyst"] },
+  { path: "/analyst/messages", label: "Team Chat", roles: ["manager", "analyst", "player"] },
+  { path: "/profile", label: "Profile", roles: ["manager", "analyst", "player"] },
+];
+
+// Player section navigation
+const PLAYER_NAV_ITEMS = [
+  { path: "/player/stats", label: "My Stats", roles: ["player"] },
+  { path: "/profile", label: "Profile", roles: ["player"] },
 ];
 
 export default function Sidebar({ userRole = "manager", onClose = null }) {
@@ -40,10 +45,12 @@ export default function Sidebar({ userRole = "manager", onClose = null }) {
   const isHomePage = pathname === "/home";
   const isManagerSection = pathname?.startsWith("/manager/");
   const isAnalystSection = pathname?.startsWith("/analyst/");
+  const isPlayerSection = pathname?.startsWith("/player/");
 
   let navItemsToUse = HOME_NAV_ITEMS; // Default to home navigation
   let usingManagerNav = false;
   let usingAnalystNav = false;
+  let usingPlayerNav = false;
 
   if (isManagerSection) {
     navItemsToUse = MANAGER_NAV_ITEMS;
@@ -51,8 +58,11 @@ export default function Sidebar({ userRole = "manager", onClose = null }) {
   } else if (isAnalystSection) {
     navItemsToUse = ANALYST_NAV_ITEMS;
     usingAnalystNav = true;
+  } else if (isPlayerSection) {
+    navItemsToUse = PLAYER_NAV_ITEMS;
+    usingPlayerNav = true;
   } else if (pathname === "/messages") {
-    // When in Team Chat, show nav matching the user's primary role
+    // Legacy /messages: show nav by user role so sidebar is consistent
     if (userRole === "manager") {
       navItemsToUse = MANAGER_NAV_ITEMS;
       usingManagerNav = true;
@@ -67,10 +77,10 @@ export default function Sidebar({ userRole = "manager", onClose = null }) {
   }
 
   // Filter nav items based on role
-  // For manager/analyst sections we always show the full section navbar,
+  // For manager/analyst/player sections we always show the full section navbar,
   // regardless of underlying role, so the section feels self-contained.
   const filteredItems = navItemsToUse.filter((item) => {
-    if (usingManagerNav || usingAnalystNav) {
+    if (usingManagerNav || usingAnalystNav || usingPlayerNav) {
       return true;
     }
 
@@ -80,6 +90,7 @@ export default function Sidebar({ userRole = "manager", onClose = null }) {
     // Fallback to old logic for backwards compatibility
     if (item.path.includes("/manager/") && userRole !== "manager") return false;
     if (item.path.includes("/analyst/") && userRole !== "analyst") return false;
+    if (item.path.includes("/player/") && userRole !== "player") return false;
     return true;
   });
 
@@ -89,7 +100,11 @@ export default function Sidebar({ userRole = "manager", onClose = null }) {
     if (path === "/analyst/dashboard") return pathname === "/analyst/dashboard" || pathname?.startsWith("/analyst/");
     if (path === "/analyst/record-events") return pathname === "/analyst/record-events" || pathname?.includes("/analyst/match/");
     if (path === "/analyst/review-matches") return pathname === "/analyst/review-matches";
+    if (path === "/player/dashboard") return pathname === "/player/dashboard";
+    if (path === "/player/stats") return pathname === "/player/stats";
     if (path === "/profile") return pathname === "/profile";
+    if (path === "/manager/messages") return pathname === "/manager/messages";
+    if (path === "/analyst/messages") return pathname === "/analyst/messages";
     if (path === "/messages") return pathname === "/messages";
     return pathname?.startsWith(path);
   };
@@ -119,9 +134,6 @@ export default function Sidebar({ userRole = "manager", onClose = null }) {
               style={[styles.navItem, active && styles.navItemActive]}
               onPress={() => router.push(item.path)}
             >
-              <Text style={[styles.navIcon, active && styles.navIconActive]}>
-                {item.icon}
-              </Text>
               <Text style={[styles.navLabel, active && styles.navLabelActive]}>
                 {item.label}
               </Text>
@@ -192,14 +204,6 @@ const styles = StyleSheet.create({
   },
   navItemActive: {
     backgroundColor: "#eff6ff",
-  },
-  navIcon: {
-    fontSize: 18,
-    marginRight: 14,
-    color: "#6b7280",
-  },
-  navIconActive: {
-    color: "#1e40af",
   },
   navLabel: {
     fontSize: 14,

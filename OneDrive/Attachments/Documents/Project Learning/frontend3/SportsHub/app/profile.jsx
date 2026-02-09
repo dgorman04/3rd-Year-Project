@@ -1,8 +1,8 @@
 // app/profile.jsx - User profile page showing team code
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform } from "react-native";
 import { router } from "expo-router";
-import AppHeader from "../components/AppHeader";
+import AppLayout from "../components/AppLayout";
 import { API, ngrokHeaders } from "../lib/config";
 import { getToken, clearToken } from "../lib/auth";
 
@@ -42,80 +42,143 @@ export default function Profile() {
     }
   };
 
+  const handleLogout = async () => {
+    await clearToken();
+    router.replace("/");
+  };
+
   if (loading || !token) {
     return (
-      <View style={styles.container}>
-        <AppHeader subtitle="Profile" />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#0f172a" />
-          <Text style={styles.loadingText}>Loading...</Text>
+      <AppLayout>
+        <View style={styles.container}>
+          {Platform.OS === "web" && (
+            <View style={styles.webHeader}>
+              <Text style={styles.webTitle}>Profile</Text>
+              <Text style={styles.webSubtitle}>Account and team information</Text>
+            </View>
+          )}
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#0f172a" />
+            <Text style={styles.loadingText}>Loading...</Text>
+          </View>
         </View>
-      </View>
+      </AppLayout>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <AppHeader subtitle="Profile" />
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* User Info */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Account Information</Text>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Email:</Text>
-            <Text style={styles.infoValue}>{user?.email || "N/A"}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Role:</Text>
-            <Text style={styles.infoValue}>{user?.role || "N/A"}</Text>
-          </View>
-        </View>
-
-        {/* Team Info */}
-        {team && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Team Information</Text>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Club:</Text>
-              <Text style={styles.infoValue}>{team.club_name || "N/A"}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Team:</Text>
-              <Text style={styles.infoValue}>{team.team_name || "N/A"}</Text>
-            </View>
-            
-            {/* Team Code Section - Prominent for Managers and Analysts */}
-            {team.team_code && (user?.role === "manager" || user?.role === "analyst") && (
-              <View style={styles.teamCodeSection}>
-                <Text style={styles.teamCodeLabel}>🔑 Team Access Code</Text>
-                <Text style={styles.teamCodeDescription}>
-                  Share this code with players so they can join your team and view stats
-                </Text>
-                <View style={styles.teamCodeBox}>
-                  <Text style={styles.teamCodeValue}>{team.team_code}</Text>
-                </View>
-                <View style={styles.teamCodeInfo}>
-                  <Text style={styles.teamCodeInfoText}>
-                    Players can use this code to join your team and access:
-                  </Text>
-                  <Text style={styles.teamCodeInfoItem}>• Team overall statistics</Text>
-                  <Text style={styles.teamCodeInfoItem}>• Their individual performance stats</Text>
-                </View>
-              </View>
-            )}
+    <AppLayout>
+      <View style={styles.container}>
+        {Platform.OS === "web" && (
+          <View style={styles.webHeader}>
+            <Text style={styles.webTitle}>Profile</Text>
+            <Text style={styles.webSubtitle}>Account and team information</Text>
           </View>
         )}
 
-        <View style={{ height: 24 }} />
-      </ScrollView>
-    </View>
+        <ScrollView contentContainerStyle={styles.content}>
+          {/* User Info */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>Account Information</Text>
+              <Text style={styles.cardSubtitle}>Your account details</Text>
+            </View>
+            <View style={styles.infoSection}>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Email</Text>
+                <Text style={styles.infoValue}>{user?.email || "N/A"}</Text>
+              </View>
+              <View style={styles.infoDivider} />
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Role</Text>
+                <View style={styles.roleBadge}>
+                  <Text style={styles.roleText}>
+                    {(user?.role || "N/A").charAt(0).toUpperCase() + (user?.role || "N/A").slice(1)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Team Info */}
+          {team && (
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>Team Information</Text>
+                <Text style={styles.cardSubtitle}>Your team details</Text>
+              </View>
+              <View style={styles.infoSection}>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Club</Text>
+                  <Text style={styles.infoValue}>{team.club_name || "N/A"}</Text>
+                </View>
+                <View style={styles.infoDivider} />
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Team</Text>
+                  <Text style={styles.infoValue}>{team.team_name || "N/A"}</Text>
+                </View>
+              </View>
+              
+              {/* Team Code Section - Prominent for Managers and Analysts */}
+              {team.team_code && (user?.role === "manager" || user?.role === "analyst") && (
+                <View style={styles.teamCodeSection}>
+                  <View style={styles.teamCodeHeader}>
+                    <Text style={styles.teamCodeLabel}>Team Access Code</Text>
+                    <Text style={styles.teamCodeDescription}>
+                      Share this code with players so they can join your team and view statistics
+                    </Text>
+                  </View>
+                  <View style={styles.teamCodeBox}>
+                    <Text style={styles.teamCodeValue}>{team.team_code}</Text>
+                  </View>
+                  <View style={styles.teamCodeInfo}>
+                    <Text style={styles.teamCodeInfoTitle}>Players can use this code to:</Text>
+                    <View style={styles.teamCodeInfoList}>
+                      <Text style={styles.teamCodeInfoItem}>• Join your team</Text>
+                      <Text style={styles.teamCodeInfoItem}>• View team overall statistics</Text>
+                      <Text style={styles.teamCodeInfoItem}>• Access their individual performance stats</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Logout Section */}
+          <View style={styles.logoutCard}>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <Text style={styles.logoutButtonText}>Sign Out</Text>
+            </TouchableOpacity>
+            <Text style={styles.logoutHint}>You will be redirected to the login page</Text>
+          </View>
+        </ScrollView>
+      </View>
+    </AppLayout>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#f9fafb",
+  },
+  webHeader: {
+    padding: 24,
+    paddingTop: Platform.OS === "web" ? 24 : 60,
+    backgroundColor: "#ffffff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+  },
+  webTitle: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 4,
+  },
+  webSubtitle: {
+    fontSize: 14,
+    fontWeight: "400",
+    color: "#6b7280",
   },
   loadingContainer: {
     flex: 1,
@@ -125,94 +188,182 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    fontWeight: "normal",
-    color: "#666",
+    fontWeight: "500",
+    color: "#6b7280",
   },
   content: {
-    padding: 12,
-    gap: 12,
+    padding: 24,
+    paddingBottom: 32,
+    gap: 16,
+    maxWidth: Platform.OS === "web" ? 720 : "100%",
+    alignSelf: Platform.OS === "web" ? "center" : "stretch",
   },
   card: {
     backgroundColor: "#ffffff",
-    borderRadius: 6,
-    padding: 16,
+    borderRadius: 16,
+    padding: 24,
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: "#e5e7eb",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cardHeader: {
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
   },
   cardTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 12,
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 4,
+    letterSpacing: -0.2,
+  },
+  cardSubtitle: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#6b7280",
+  },
+  infoSection: {
+    gap: 0,
   },
   infoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#ddd",
+    paddingVertical: 14,
+  },
+  infoDivider: {
+    height: 1,
+    backgroundColor: "#e5e7eb",
+    marginVertical: 4,
   },
   infoLabel: {
-    fontSize: 12,
-    fontWeight: "normal",
-    color: "#666",
-  },
-  infoValue: {
-    fontSize: 14,
-    fontWeight: "normal",
-    color: "#333",
-  },
-  teamCodeSection: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#ddd",
-  },
-  teamCodeLabel: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#333",
+    color: "#6b7280",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  infoValue: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#111827",
+  },
+  roleBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: "#0f172a",
+  },
+  roleText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#ffffff",
+    textTransform: "capitalize",
+  },
+  teamCodeSection: {
+    marginTop: 24,
+    paddingTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
+  },
+  teamCodeHeader: {
+    marginBottom: 16,
+  },
+  teamCodeLabel: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
     marginBottom: 6,
   },
   teamCodeDescription: {
-    fontSize: 12,
-    fontWeight: "normal",
-    color: "#666",
-    marginBottom: 12,
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#6b7280",
     lineHeight: 18,
   },
   teamCodeBox: {
-    backgroundColor: "#4a90e2",
-    borderRadius: 6,
-    padding: 16,
+    backgroundColor: "#0f172a",
+    borderRadius: 12,
+    padding: 24,
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 16,
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   teamCodeValue: {
-    fontSize: 28,
-    fontWeight: "600",
+    fontSize: 32,
+    fontWeight: "800",
     color: "#ffffff",
-    letterSpacing: 2,
+    letterSpacing: 3,
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
   },
   teamCodeInfo: {
-    backgroundColor: "#f5f5f5",
-    borderRadius: 6,
-    padding: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: "#4a90e2",
+    backgroundColor: "#f9fafb",
+    borderRadius: 10,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: "#0f172a",
   },
-  teamCodeInfoText: {
-    fontSize: 11,
-    fontWeight: "normal",
-    color: "#666",
-    marginBottom: 6,
+  teamCodeInfoTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 10,
+  },
+  teamCodeInfoList: {
+    gap: 6,
   },
   teamCodeInfoItem: {
-    fontSize: 11,
-    fontWeight: "normal",
-    color: "#666",
-    marginBottom: 3,
-    marginLeft: 6,
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#4b5563",
+    lineHeight: 20,
+  },
+  logoutCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    alignItems: "center",
+  },
+  logoutButton: {
+    backgroundColor: "#dc2626",
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 10,
+    width: "100%",
+    alignItems: "center",
+    shadowColor: "#dc2626",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  logoutButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  logoutHint: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#9ca3af",
+    marginTop: 12,
+    textAlign: "center",
   },
 });

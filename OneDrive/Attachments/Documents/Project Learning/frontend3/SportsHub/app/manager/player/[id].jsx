@@ -7,7 +7,6 @@ import PitchVisualization from "../../../components/PitchVisualization";
 import { API, ngrokHeaders } from "../../../lib/config";
 import { getToken, clearToken } from "../../../lib/auth";
 import { LineChart } from "react-native-chart-kit";
-import { VictoryLine, VictoryChart, VictoryAxis, VictoryTheme, VictoryArea } from "victory-native";
 
 const screenW = Dimensions.get("window").width;
 
@@ -488,11 +487,6 @@ export default function PlayerProfile() {
           <View style={styles.ratingBadge}>
             <Text style={styles.ratingLabel}>Overall Rating</Text>
             <Text style={styles.ratingValue}>{playerKPIs.rating.toFixed(1)}</Text>
-            <View style={styles.ratingNote}>
-              <Text style={styles.ratingNoteText}>
-                Based on attacking actions (goals, key passes), defensive contributions (tackles, interceptions), and duel performance
-              </Text>
-            </View>
           </View>
         </View>
 
@@ -534,115 +528,50 @@ export default function PlayerProfile() {
               <Text style={styles.cardTitle}>Rating Progression</Text>
               <Text style={styles.cardSubtitle}>Performance rating over time</Text>
             </View>
-            {Platform.OS === "web" ? (
-              <LineChart
-                data={{
-                  labels: ratingProgression.map((_, i) => {
-                    if (ratingProgression.length <= 5) return `GW${i + 1}`;
-                    if (i === 0 || i === ratingProgression.length - 1) return `GW${i + 1}`;
-                    if (i % Math.ceil(ratingProgression.length / 5) === 0) return `GW${i + 1}`;
-                    return "";
-                  }),
-                  datasets: [{
-                    data: ratingProgression.map(r => r.rating),
-                    color: (opacity = 1) => `rgba(15, 23, 42, ${opacity})`,
-                    strokeWidth: 3,
-                  }],
-                }}
-                width={Math.min(screenW - 80, 800)}
-                height={280}
-                chartConfig={{
-                  backgroundColor: "#ffffff",
-                  backgroundGradientFrom: "#f8f9fa",
-                  backgroundGradientTo: "#ffffff",
-                  decimalPlaces: 1,
+            <LineChart
+              data={{
+                labels: ratingProgression.map((_, i) => {
+                  if (ratingProgression.length <= 5) return `GW${i + 1}`;
+                  if (i === 0 || i === ratingProgression.length - 1) return `GW${i + 1}`;
+                  if (i % Math.ceil(ratingProgression.length / 5) === 0) return `GW${i + 1}`;
+                  return "";
+                }),
+                datasets: [{
+                  data: ratingProgression.map(r => r.rating),
                   color: (opacity = 1) => `rgba(15, 23, 42, ${opacity})`,
-                  labelColor: (opacity = 1) => `rgba(100, 116, 139, ${opacity})`,
-                  propsForDots: {
-                    r: "6",
-                    strokeWidth: "3",
-                    stroke: "#ffffff",
-                    fill: "#0f172a",
-                  },
-                  propsForBackgroundLines: {
-                    stroke: "#e2e8f0",
-                    strokeWidth: 1,
-                    strokeDasharray: "0",
-                  },
-                  fillShadowGradient: "#0f172a",
-                  fillShadowGradientOpacity: 0.1,
-                }}
-                bezier
-                withInnerLines={false}
-                withOuterLines={true}
-                withVerticalLines={false}
-                withHorizontalLines={true}
-                style={styles.premiumChart}
-              />
-            ) : (
-              <View style={styles.chartWrapper}>
-                <VictoryChart
-                  theme={VictoryTheme.material}
-                  height={300}
-                  width={screenW - 60}
-                  padding={{ left: 65, right: 45, top: 45, bottom: 65 }}
-                  domain={{ y: [0, 10] }}
-                >
-                  <VictoryAxis
-                    dependentAxis
-                    tickFormat={(t) => `${t.toFixed(1)}`}
-                    style={{
-                      axis: { stroke: "#cbd5e1", strokeWidth: 2 },
-                      tickLabels: { fill: "#64748b", fontSize: 12, fontWeight: "700" },
-                      grid: { stroke: "#e2e8f0", strokeWidth: 1.5, strokeDasharray: "4,4" },
-                    }}
-                  />
-                  <VictoryAxis
-                    tickFormat={(t) => {
-                      if (ratingProgression.length <= 5) return `GW${t + 1}`;
-                      if (t === 0 || t === ratingProgression.length - 1) return `GW${t + 1}`;
-                      if (t % Math.ceil(ratingProgression.length / 5) === 0) return `GW${t + 1}`;
-                      return "";
-                    }}
-                    style={{
-                      axis: { stroke: "#cbd5e1", strokeWidth: 2 },
-                      tickLabels: { fill: "#475569", fontSize: 12, fontWeight: "700" },
-                    }}
-                  />
-                  <VictoryArea
-                    data={ratingProgression.map((r, i) => ({ x: i, y: r.rating }))}
-                    interpolation="natural"
-                    style={{
-                      data: {
-                        fill: "rgba(15, 23, 42, 0.15)",
-                      },
-                    }}
-                  />
-                  <VictoryLine
-                    data={ratingProgression.map((r, i) => ({ x: i, y: r.rating }))}
-                    interpolation="natural"
-                    style={{
-                      data: {
-                        stroke: "#ffffff",
-                        strokeWidth: 6,
-                        strokeLinecap: "round",
-                      },
-                    }}
-                  />
-                  <VictoryLine
-                    data={ratingProgression.map((r, i) => ({ x: i, y: r.rating }))}
-                    interpolation="natural"
-                    style={{
-                      data: {
-                        stroke: "#0f172a",
-                        strokeWidth: 3.5,
-                        strokeLinecap: "round",
-                      },
-                    }}
-                  />
-                </VictoryChart>
-              </View>
-            )}
+                  strokeWidth: 3,
+                }],
+              }}
+              width={Math.min(screenW - 80, 800)}
+              height={280}
+              chartConfig={{
+                backgroundColor: "#ffffff",
+                backgroundGradientFrom: "#f8f9fa",
+                backgroundGradientTo: "#ffffff",
+                decimalPlaces: 1,
+                color: (opacity = 1) => `rgba(15, 23, 42, ${opacity})`,
+                labelColor: (opacity = 1) => `rgba(100, 116, 139, ${opacity})`,
+                propsForDots: {
+                  r: "6",
+                  strokeWidth: "3",
+                  stroke: "#ffffff",
+                  fill: "#0f172a",
+                },
+                propsForBackgroundLines: {
+                  stroke: "#e2e8f0",
+                  strokeWidth: 1,
+                  strokeDasharray: "0",
+                },
+                fillShadowGradient: "#0f172a",
+                fillShadowGradientOpacity: 0.1,
+              }}
+              bezier
+              withInnerLines={false}
+              withOuterLines={true}
+              withVerticalLines={false}
+              withHorizontalLines={true}
+              style={styles.premiumChart}
+            />
           </View>
         )}
 

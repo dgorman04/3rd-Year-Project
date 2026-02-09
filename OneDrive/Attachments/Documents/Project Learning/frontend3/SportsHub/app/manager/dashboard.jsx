@@ -14,15 +14,12 @@ import { router } from "expo-router";
 
 import { API, WS_URL, ngrokHeaders } from "../../lib/config";
 import { getToken, clearToken } from "../../lib/auth";
-import AppHeader from "../../components/AppHeader";
-import ChatBubble from "../../components/ChatBubble";
 import AppLayout from "../../components/AppLayout";
 import KPICard from "../../components/KPICard";
 import PitchVisualization from "../../components/PitchVisualization";
 
-// Charts
+// Charts (use react-native-chart-kit for all platforms; victory-native can be undefined on iOS)
 import { BarChart, LineChart, PieChart } from "react-native-chart-kit";
-import { VictoryBar, VictoryChart, VictoryAxis, VictoryLabel } from "victory-native";
 
 const screenW = Dimensions.get("window").width;
 
@@ -53,6 +50,8 @@ export default function ManagerDashboard() {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
   const wsRef = useRef(null);
+  const liveMatchRef = useRef(null);
+  liveMatchRef.current = liveMatch;
   const [insights, setInsights] = useState([]);
   const [playerXGStats, setPlayerXGStats] = useState([]);
   const [selectedSeason, setSelectedSeason] = useState(null);
@@ -62,7 +61,7 @@ export default function ManagerDashboard() {
   const [matches, setMatches] = useState([]);
   const [eventInstances, setEventInstances] = useState([]);
   const [selectedEventType, setSelectedEventType] = useState("shots_on_target");
-  const yAxisLabelsShown = useRef(new Set());
+  const [formationChartReady, setFormationChartReady] = useState(false);
 
   const API_STATS_URL = `${API}/stats/`;
   const API_INSIGHTS_URL = `${API}/analytics/insights/`;
@@ -470,7 +469,8 @@ export default function ManagerDashboard() {
               .catch(e => console.log("Error refreshing team performance:", e));
             
             // Also refresh live match if it's the current live match
-            if (liveMatch && match_id && Number(match_id) === liveMatch.id) {
+            const currentLive = liveMatchRef.current;
+            if (currentLive && match_id && Number(match_id) === currentLive.id) {
               fetch(API_CURRENT_LIVE_MATCH, {
                 headers: {
                   Authorization: `Bearer ${token}`,
@@ -499,8 +499,9 @@ export default function ManagerDashboard() {
           });
 
           // If this event is for the live match, refresh live match stats
-          if (liveMatch && match_id && Number(match_id) === liveMatch.id) {
-            fetch(`${API}/matches/${liveMatch.id}/stats/`, {
+          const currentLive = liveMatchRef.current;
+          if (currentLive && match_id && Number(match_id) === currentLive.id) {
+            fetch(`${API}/matches/${currentLive.id}/stats/`, {
               headers: {
                 Authorization: `Bearer ${token}`,
                 ...ngrokHeaders(),
@@ -525,7 +526,7 @@ export default function ManagerDashboard() {
         ws.close();
       } catch {}
     };
-  }, [token, liveMatch]);
+  }, [token]);
 
   // ----------------------------
   // Derived analytics (memoized)
@@ -789,21 +790,24 @@ export default function ManagerDashboard() {
   // Get max value for y-axis - fixed to 3 for consistent display
   const maxPoints = 3;
 
-  // Reset Y-axis labels set when chart data changes
+  // Delay mounting Formation BarChart so bars paint on first load (avoids refresh)
   useEffect(() => {
-    yAxisLabelsShown.current.clear();
+    if (formationChartData && formationChartData.length > 0) {
+      const t = setTimeout(() => setFormationChartReady(true), 100);
+      return () => clearTimeout(t);
+    } else {
+      setFormationChartReady(false);
+    }
   }, [formationChartData]);
 
   // Enhanced insights algorithm
   const enhancedInsights = useMemo(() => {
     const insights = [];
     
-    // xG Analysis
+    // xG Analysis (xG For only)
     if (teamPerformance?.xg) {
       const xgFor = teamPerformance.xg.for || 0;
-      const xgAgainst = teamPerformance.xg.against || 0;
       const goalsFor = teamPerformance.goals?.scored || 0;
-      const goalsAgainst = teamPerformance.goals?.conceded || 0;
       
       if (goalsFor > xgFor * 1.2 && xgFor > 0) {
         insights.push({
@@ -818,15 +822,6 @@ export default function ManagerDashboard() {
           category: "Finishing",
           title: "Underperforming xG",
           message: `Only ${goalsFor} goals from ${xgFor.toFixed(1)} xG suggests finishing needs improvement.`,
-        });
-      }
-      
-      if (goalsAgainst < xgAgainst * 0.8 && xgAgainst > 0) {
-        insights.push({
-          type: "positive",
-          category: "Defense",
-          title: "Strong Goalkeeping",
-          message: `Conceding only ${goalsAgainst} goals from ${xgAgainst.toFixed(1)} xG against shows excellent defensive performance.`,
         });
       }
     }
@@ -921,23 +916,31 @@ export default function ManagerDashboard() {
     return zoneData;
   }, [eventInstances]);
 
-  // Don't render until token is loaded AND valid - this prevents ALL useEffects from running
-  if (!tokenLoaded) return null;
+  // Don't render main UI until token is loaded AND valid (use View not null to avoid RN render error)
+  if (!tokenLoaded) {
+    return (
+      <AppLayout>
+        <View style={styles.screen} />
+      </AppLayout>
+    );
+  }
   if (!token || token === null || token === "") {
-    // Clear any polling that might have started
     if (liveMatchPollRef.current) {
       clearInterval(liveMatchPollRef.current);
       liveMatchPollRef.current = null;
     }
     shouldPollRef.current = false;
-    return null;
+    return (
+      <AppLayout>
+        <View style={styles.screen} />
+      </AppLayout>
+    );
   }
 
   return (
     <AppLayout>
       <View style={styles.screen}>
-        {Platform.OS !== "web" && <AppHeader subtitle="Dashboard" />}
-        
+        {/* Web only: top header and status badge. On phone use sidebar only (no duplicate navbar). */}
         {Platform.OS === "web" && (
           <View style={styles.webHeader}>
             <View>
@@ -947,26 +950,6 @@ export default function ManagerDashboard() {
             <View style={styles.statusBadge}>
               <View style={[styles.statusDot, wsStatus === "Live" && styles.statusDotLive]} />
               <Text style={styles.statusText}>{wsStatus}</Text>
-            </View>
-          </View>
-        )}
-
-        {Platform.OS !== "web" && (
-          <View style={styles.statusBar}>
-            <Text style={styles.status}>Status: {wsStatus}</Text>
-            <View style={styles.headerActions}>
-              <TouchableOpacity 
-                style={[styles.navBtn, liveMatch && styles.navBtnLive]} 
-                onPress={() => router.push("/manager/current-match")}
-              >
-                <Text style={[styles.navBtnText, liveMatch && styles.navBtnTextLive]}>Live Match</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.navBtn} onPress={() => router.push("/manager/players")}>
-                <Text style={styles.navBtnText}>Players</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.navBtn} onPress={() => router.push("/manager/matches")}>
-                <Text style={styles.navBtnText}>Matches</Text>
-              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -1007,11 +990,8 @@ export default function ManagerDashboard() {
           {/* xG Overview */}
           {teamPerformance && (() => {
             const xgFor = teamPerformance.xg?.for || 0;
-            const xgAgainst = teamPerformance.xg?.against || 0;
             const goalsScored = teamPerformance.goals?.scored || 0;
-            const goalsConceded = teamPerformance.goals?.conceded || 0;
             const xgForDiff = goalsScored - xgFor;
-            const xgAgainstDiff = goalsConceded - xgAgainst;
 
             return (
               <View style={styles.xgCard}>
@@ -1057,50 +1037,12 @@ export default function ManagerDashboard() {
                     </View>
                   </View>
                 </View>
-
-                {/* xG Against Section */}
-                <View style={styles.xgSection}>
-                  <View style={styles.xgSectionHeader}>
-                    <View style={styles.xgSectionBar} />
-                    <Text style={styles.xgSectionTitle}>xG Against</Text>
-                  </View>
-                  <View style={styles.xgSectionContent}>
-                    <View style={styles.xgMetricRow}>
-                      <View style={styles.xgMetricItem}>
-                        <Text style={styles.xgMetricLabel}>Expected Goals</Text>
-                        <Text style={styles.xgMetricValue}>{xgAgainst.toFixed(2)}</Text>
-                      </View>
-                      <View style={styles.xgMetricDivider} />
-                      <View style={styles.xgMetricItem}>
-                        <Text style={styles.xgMetricLabel}>Goals Conceded</Text>
-                        <Text style={styles.xgMetricValue}>{goalsConceded}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.xgDifferenceRow}>
-                      <Text style={styles.xgDifferenceLabel}>Difference</Text>
-                      <Text style={[
-                        styles.xgDifferenceValue,
-                        xgAgainstDiff <= 0 ? styles.xgPositive : styles.xgNegative
-                      ]}>
-                        {xgAgainstDiff >= 0 ? "+" : ""}{xgAgainstDiff.toFixed(2)}
-                      </Text>
-                    </View>
-                    <View style={styles.xgPerformanceIndicator}>
-                      <Text style={[
-                        styles.xgPerformanceText,
-                        xgAgainstDiff <= 0 ? styles.xgPositive : styles.xgNegative
-                      ]}>
-                        {xgAgainstDiff <= 0 ? "Overperforming" : "Underperforming"}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
               </View>
             );
           })()}
 
           {/* Results by Formation - Premium Chart */}
-          {formationChartData && formationChartData.length > 0 && (
+          {formationChartData && formationChartData.length > 0 && formationChartReady && (
             <View style={styles.premiumChartCard}>
               <View style={styles.premiumChartHeader}>
                 <View>
@@ -1109,205 +1051,91 @@ export default function ManagerDashboard() {
                 </View>
               </View>
               <View style={styles.premiumChartContainer}>
-                {Platform.OS === "web" ? (
-                  // Web: Use react-native-chart-kit with premium styling
-                  <View style={styles.chartWrapper}>
-                    {/* Y-Axis Label */}
-                    <View style={styles.chartYAxisLabel}>
-                      <Text style={[styles.chartAxisLabelText, { transform: [{ rotate: "-90deg" }] }]}>POINTS</Text>
-                    </View>
-                    <BarChart
-                      data={{
-                        labels: formationChartData.map(d => d.x),
-                        datasets: [{
-                          data: formationChartData.map(d => Math.min(d.y, 3)), // Cap at 3 for display
-                        }],
-                      }}
-                      width={Platform.OS === "web" ? 750 : screenW - 60}
-                      height={380}
-                      chartConfig={{
-                        backgroundColor: "transparent",
-                        backgroundGradientFrom: "#ffffff",
-                        backgroundGradientTo: "#ffffff",
-                        decimalPlaces: 0,
-                        color: (opacity = 1, index) => {
-                          if (index === undefined || !formationChartData || !formationChartData[index]) {
-                            return `rgba(37, 99, 235, ${opacity})`; // Default blue
-                          }
-                          const datum = formationChartData[index];
-                          if (!datum || datum.y === undefined) {
-                            return `rgba(37, 99, 235, ${opacity})`; // Default blue
-                          }
-                          const intensity = datum.y / maxPoints;
-                          if (intensity > 0.75) return `rgba(30, 58, 138, ${opacity})`; // Deep blue
-                          if (intensity > 0.5) return `rgba(37, 99, 235, ${opacity})`; // Medium blue
-                          if (intensity > 0.25) return `rgba(59, 130, 246, ${opacity})`; // Light blue
-                          return `rgba(96, 165, 250, ${opacity})`; // Lighter blue
-                        },
-                        labelColor: (opacity = 1) => `rgba(15, 23, 42, ${opacity})`,
-                        fillShadowGradient: "#2563eb",
-                        fillShadowGradientOpacity: 0.9,
-                        style: {
-                          borderRadius: 0,
-                        },
-                        barPercentage: 0.65,
-                        propsForBackgroundLines: {
-                          strokeDasharray: "",
-                          stroke: "#f1f5f9",
-                          strokeWidth: 1,
-                        },
-                        propsForLabels: {
-                          fontSize: 15,
-                          fontWeight: "900",
-                          fontFamily: Platform.OS === "ios" ? "System" : "Roboto",
-                          fill: "#0f172a",
-                        },
-                        propsForVerticalLabels: {
-                          fontSize: 13,
-                          fontWeight: "700",
-                          fill: "#64748b",
-                        },
-                        propsForHorizontalLabels: {
-                          fontSize: 16,
-                          fontWeight: "800",
-                          fill: "#0f172a",
-                          fontFamily: Platform.OS === "ios" ? "System" : "Roboto",
-                        },
-                      }}
-                      style={styles.premiumChart}
-                      showValuesOnTopOfBars={false}
-                      fromZero
-                      yAxisLabel=""
-                      yAxisSuffix=""
-                      yAxisInterval={1}
-                      withInnerLines={true}
-                      withVerticalLabels={true}
-                      withHorizontalLabels={true}
-                      segments={3}
-                      formatYLabel={(value) => {
-                        const num = parseFloat(value);
-                        
-                        // Check if the value is exactly or very close to 0, 1, 2, or 3
-                        let label = null;
-                        if (Math.abs(num - 0) < 0.001) label = "0";
-                        else if (Math.abs(num - 1) < 0.001) label = "1";
-                        else if (Math.abs(num - 2) < 0.001) label = "2";
-                        else if (Math.abs(num - 3) < 0.001) label = "3";
-                        
-                        // Only return the label if we haven't shown it yet in this render cycle
-                        if (label) {
-                          // Reset if we've shown all 4 values (new render cycle starting)
-                          if (yAxisLabelsShown.current.size >= 4) {
-                            yAxisLabelsShown.current.clear();
-                          }
-                          
-                          if (!yAxisLabelsShown.current.has(label)) {
-                            yAxisLabelsShown.current.add(label);
-                            return label;
-                          }
+                <View style={styles.chartWrapper}>
+                  <View style={styles.chartYAxisLabel}>
+                    <Text style={[styles.chartAxisLabelText, { transform: [{ rotate: "-90deg" }] }]}>POINTS</Text>
+                  </View>
+                  <BarChart
+                    key={`formation-bars-${formationChartData.length}-${formationChartData.map(d => d.x).join("-")}`}
+                    data={{
+                      labels: formationChartData.map(d => d.x),
+                      datasets: [{
+                        data: formationChartData.map(d => Math.min(Number(d.y), 3)),
+                      }],
+                    }}
+                    width={Platform.OS === "web" ? 750 : screenW - 60}
+                    height={380}
+                    chartConfig={{
+                      backgroundColor: "transparent",
+                      backgroundGradientFrom: "#ffffff",
+                      backgroundGradientTo: "#ffffff",
+                      decimalPlaces: 2,
+                      color: (opacity = 1, index) => {
+                        if (index === undefined || !formationChartData || !formationChartData[index]) {
+                          return `rgba(37, 99, 235, ${opacity})`;
                         }
-                        
+                        const datum = formationChartData[index];
+                        if (!datum || datum.y === undefined) {
+                          return `rgba(37, 99, 235, ${opacity})`;
+                        }
+                        const intensity = datum.y / maxPoints;
+                        if (intensity > 0.75) return `rgba(30, 58, 138, ${opacity})`;
+                        if (intensity > 0.5) return `rgba(37, 99, 235, ${opacity})`;
+                        if (intensity > 0.25) return `rgba(59, 130, 246, ${opacity})`;
+                        return `rgba(96, 165, 250, ${opacity})`;
+                      },
+                      labelColor: (opacity = 1) => `rgba(15, 23, 42, ${opacity})`,
+                      fillShadowGradient: "#2563eb",
+                      fillShadowGradientOpacity: 0.9,
+                      style: { borderRadius: 0 },
+                      barPercentage: 0.65,
+                      propsForBackgroundLines: {
+                        strokeDasharray: "",
+                        stroke: "#f1f5f9",
+                        strokeWidth: 1,
+                      },
+                      propsForLabels: {
+                        fontSize: 15,
+                        fontWeight: "900",
+                        fontFamily: Platform.OS === "ios" ? "System" : "Roboto",
+                        fill: "#0f172a",
+                      },
+                      propsForVerticalLabels: {
+                        fontSize: 13,
+                        fontWeight: "700",
+                        fill: "#64748b",
+                      },
+                      propsForHorizontalLabels: {
+                        fontSize: 16,
+                        fontWeight: "800",
+                        fill: "#0f172a",
+                        fontFamily: Platform.OS === "ios" ? "System" : "Roboto",
+                      },
+                      formatYLabel: (value) => {
+                        const num = parseFloat(value);
+                        const r = Math.round(num);
+                        if (r >= 0 && r <= 3 && Math.abs(num - r) < 0.001) return String(r);
                         return "";
-                      }}
-                      yAxisMax={3}
-                      yAxisMin={0}
-                      verticalLabelRotation={0}
-                    />
-                  </View>
-                ) : (
-                  // Native: Use Victory Chart
-                  <View style={styles.chartWrapper}>
-                    {/* Y-Axis Label */}
-                    <View style={styles.chartYAxisLabel}>
-                      <Text style={[styles.chartAxisLabelText, { transform: [{ rotate: "-90deg" }] }]}>POINTS</Text>
-                    </View>
-                    <VictoryChart
-                      domainPadding={{ x: [40, 40], y: [0, 20] }}
-                      height={380}
-                      width={screenW - 60}
-                      padding={{ left: 70, right: 50, top: 50, bottom: 80 }}
-                    >
-                    <VictoryAxis
-                      dependentAxis
-                      tickFormat={(t) => `${t.toFixed(1)}`}
-                      tickCount={6}
-                      style={{
-                        axis: { stroke: "#94a3b8", strokeWidth: 2.5 },
-                        tickLabels: {
-                          fill: "#475569",
-                          fontSize: 13,
-                          fontWeight: "700",
-                          fontFamily: Platform.OS === "ios" ? "System" : "Roboto",
-                          padding: 8,
-                        },
-                        grid: {
-                          stroke: "#e2e8f0",
-                          strokeWidth: 1.5,
-                          strokeDasharray: "0",
-                        },
-                      }}
-                      domain={[0, 3]}
-                    />
-                    <VictoryAxis
-                      style={{
-                        axis: { stroke: "#94a3b8", strokeWidth: 2.5 },
-                        tickLabels: {
-                          fill: "#0f172a",
-                          fontSize: 15,
-                          fontWeight: "800",
-                          fontFamily: Platform.OS === "ios" ? "System" : "Roboto",
-                          angle: 0,
-                          padding: 10,
-                        },
-                      }}
-                    />
-                    <VictoryBar
-                      data={formationChartData}
-                      x="x"
-                      y="y"
-                      cornerRadius={{ top: 10, topLeft: 10, topRight: 10 }}
-                      barWidth={80}
-                      style={{
-                        data: {
-                          fill: ({ datum }) => {
-                            const intensity = datum.y / maxPoints;
-                            if (intensity > 0.75) return "#1e3a8a";
-                            if (intensity > 0.5) return "#2563eb";
-                            if (intensity > 0.25) return "#3b82f6";
-                            return "#60a5fa";
-                          },
-                          stroke: "#ffffff",
-                          strokeWidth: 3,
-                        },
-                        labels: {
-                          fill: "#ffffff",
-                          fontSize: 14,
-                          fontWeight: "900",
-                          fontFamily: Platform.OS === "ios" ? "System" : "Roboto",
-                        },
-                      }}
-                      labels={({ datum }) => `${datum.y.toFixed(2)}`}
-                      labelComponent={
-                        <VictoryLabel
-                          dy={-12}
-                          style={{
-                            fill: "#0f172a",
-                            fontSize: 15,
-                            fontWeight: "900",
-                            textShadow: "0 1px 2px rgba(255,255,255,0.8)",
-                          }}
-                        />
-                      }
-                      animate={{
-                        duration: 1000,
-                        onLoad: { duration: 800 },
-                        easing: "bounceOut",
-                      }}
-                    />
-                  </VictoryChart>
-                  </View>
-                )}
-                
+                      },
+                      formatTopBarValue: (value) => Number(value).toFixed(2),
+                    }}
+                    style={styles.premiumChart}
+                    showValuesOnTopOfBars
+                    fromZero
+                    fromNumber={3}
+                    yAxisLabel=""
+                    yAxisSuffix=""
+                    yAxisInterval={1}
+                    withInnerLines={true}
+                    withVerticalLabels={true}
+                    withHorizontalLabels={true}
+                    segments={3}
+                    yAxisMax={3}
+                    yAxisMin={0}
+                    verticalLabelRotation={0}
+                  />
+                </View>
+
                 {/* X-Axis Label */}
                 <View style={styles.chartXAxisLabel}>
                   <Text style={styles.chartAxisLabelText}>FORMATION</Text>
@@ -1342,7 +1170,7 @@ export default function ManagerDashboard() {
               </ScrollView>
             </View>
 
-            {/* Pitch Visualization - Vertical layout top to bottom */}
+            {/* Pitch Visualization - same design as home Zone Analysis */}
             {selectedEventType && (() => {
               const data = zoneAnalysisByEvent[selectedEventType];
               if (!data || data.total === 0) {
@@ -1353,99 +1181,35 @@ export default function ManagerDashboard() {
                 );
               }
 
-              // Zone layout: 2 columns, 3 rows (pairs going down)
-              // Zones 1-3 are attacking zones (opponent's goal), 4-6 are defensive zones (our goal)
-              const zoneLayout = [
-                { zone: "1", label: "Zone 1", row: 0 },
-                { zone: "2", label: "Zone 2", row: 0 },
-                { zone: "3", label: "Zone 3", row: 1 },
-                { zone: "4", label: "Zone 4", row: 1 },
-                { zone: "5", label: "Zone 5", row: 2 },
-                { zone: "6", label: "Zone 6", row: 2 },
-              ];
+              const heatMapData = {
+                defensive_left: data.zoneCounts["1"] || 0,
+                defensive_center: data.zoneCounts["2"] || 0,
+                defensive_right: data.zoneCounts["3"] || 0,
+                attacking_left: data.zoneCounts["4"] || 0,
+                attacking_center: data.zoneCounts["5"] || 0,
+                attacking_right: data.zoneCounts["6"] || 0,
+              };
+
+              const zoneNumToId = { "1": "defensive_left", "2": "defensive_center", "3": "defensive_right", "4": "attacking_left", "5": "attacking_center", "6": "attacking_right" };
+              const zoneLabels = {};
+              data.zonePercentages.forEach((z) => {
+                const num = z.zone.replace("Zone ", "");
+                const id = zoneNumToId[num];
+                if (id) zoneLabels[id] = `${z.percentage}%`;
+              });
 
               return (
-                <View style={styles.pitchContainer}>
-                  <Text style={styles.pitchEventTitle}>
-                    {selectedEventType.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
-                  </Text>
-                  <Text style={styles.pitchEventSubtitle}>{data.total} total events</Text>
-                  
-                  <View style={styles.pitchField}>
-                    {/* Opponent Goal (Top) */}
-                    <View style={styles.pitchGoalTop}>
-                      <Text style={styles.pitchGoalLabel}>Opponent Goal</Text>
-                    </View>
-                    
-                    {/* Pitch Zones - 2 columns, 3 rows */}
-                    <View style={styles.pitchZonesContainer}>
-                      {zoneLayout.map((layout) => {
-                        const zoneData = data.zonePercentages.find(z => z.zone === `Zone ${layout.zone}`);
-                        if (!zoneData) return null;
-                        
-                        const percentage = zoneData.percentage;
-                        // Premium color gradient - more sophisticated
-                        let r, g, b;
-                        if (percentage < 5) {
-                          r = 240; g = 245; b = 240; // Very light grey-green
-                        } else if (percentage >= 5 && percentage < 15) {
-                          // Smooth green gradient
-                          const t = (percentage - 5) / 10;
-                          r = Math.floor(34 + t * 30);
-                          g = Math.floor(197 + t * 35);
-                          b = Math.floor(94 + t * 20);
-                        } else if (percentage >= 15 && percentage < 30) {
-                          // Green to yellow transition
-                          const t = (percentage - 15) / 15;
-                          r = Math.floor(64 + t * 120);
-                          g = Math.floor(232 + t * 15);
-                          b = Math.floor(114 - t * 70);
-                        } else {
-                          // Yellow to red transition
-                          const t = Math.min(1, (percentage - 30) / 20);
-                          r = Math.floor(184 + t * 71);
-                          g = Math.floor(247 - t * 100);
-                          b = Math.floor(44 - t * 44);
-                        }
-                        const zoneColor = `rgb(${r}, ${g}, ${b})`;
-
-                        return (
-                          <View 
-                            key={layout.zone} 
-                            style={[
-                              styles.pitchZone,
-                              { 
-                                backgroundColor: zoneColor,
-                                borderColor: percentage > 10 ? "rgba(255, 255, 255, 0.8)" : "rgba(229, 231, 235, 0.6)",
-                              }
-                            ]}
-                          >
-                            <View style={styles.pitchZoneContent}>
-                              <View style={styles.pitchZoneHeader}>
-                                <Text style={styles.pitchZoneLabel}>Zone {layout.zone}</Text>
-                                <Text style={styles.pitchZonePercentage}>{percentage}%</Text>
-                              </View>
-                              <Text style={styles.pitchZoneCount}>{zoneData.count}</Text>
-                              <Text style={styles.pitchZoneSubtext}>events</Text>
-                              <View style={styles.pitchZoneBar}>
-                                <View 
-                                  style={[
-                                    styles.pitchZoneBarFill,
-                                    { width: `${percentage}%` }
-                                  ]}
-                                />
-                              </View>
-                            </View>
-                          </View>
-                        );
-                      })}
-                    </View>
-                    
-                    {/* Our Goal (Bottom) */}
-                    <View style={styles.pitchGoalBottom}>
-                      <Text style={styles.pitchGoalLabel}>Our Goal</Text>
-                    </View>
+                <View style={styles.zoneAnalysisPitchContainer}>
+                  <View style={styles.zoneAnalysisPitchWrapper}>
+                    <PitchVisualization
+                      width={Math.min(screenW - 72, 380)}
+                      height={300}
+                      heatMapData={heatMapData}
+                      zoneLabels={zoneLabels}
+                      minimalContainer
+                    />
                   </View>
+                  <Text style={styles.zoneAnalysisTotalCaption}>Total events: {data.total}</Text>
                 </View>
               );
             })()}
@@ -1513,7 +1277,7 @@ export default function ManagerDashboard() {
                               <Text style={styles.topPerformerName}>{leader.player}</Text>
                               <View style={styles.topPerformerValueContainer}>
                                 <Text style={styles.topPerformerValue}>
-                                  {stat.isXG ? leader.count.toFixed(2) : leader.count}
+                                  {stat.isXG && leader.count != null ? Number(leader.count).toFixed(2) : (leader.count ?? 0)}
                                 </Text>
                                 {stat.isXG && (
                                   <Text style={styles.topPerformerUnit}>xG</Text>
@@ -1567,7 +1331,6 @@ export default function ManagerDashboard() {
 
           <View style={{ height: 24 }} />
         </ScrollView>
-        {userRole === "manager" && Platform.OS !== "web" && <ChatBubble userRole={userRole} />}
       </View>
     </AppLayout>
   );
@@ -2520,6 +2283,26 @@ const styles = StyleSheet.create({
   // Pitch Visualization Styles
   pitchContainer: {
     marginBottom: 24,
+  },
+  zoneAnalysisPitchContainer: {
+    marginBottom: 0,
+  },
+  zoneAnalysisPitchWrapper: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+    backgroundColor: "rgba(248,250,252,0.6)",
+  },
+  zoneAnalysisTotalCaption: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#94a3b8",
+    textAlign: "center",
+    letterSpacing: 0.3,
   },
   pitchEventTitle: {
     fontSize: 18,

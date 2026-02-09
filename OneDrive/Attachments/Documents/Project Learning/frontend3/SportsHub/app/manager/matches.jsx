@@ -5,7 +5,6 @@ import { router } from "expo-router";
 
 import { API, ngrokHeaders } from "../../lib/config";
 import { getToken, clearToken } from "../../lib/auth";
-import AppHeader from "../../components/AppHeader";
 import AppLayout from "../../components/AppLayout";
 import { LineChart } from "react-native-chart-kit";
 
@@ -164,8 +163,6 @@ export default function ManagerMatches() {
   return (
     <AppLayout>
       <View style={styles.screen}>
-        {Platform.OS !== "web" && <AppHeader subtitle="Matches" />}
-        
         {Platform.OS === "web" && (
           <View style={styles.webHeader}>
             <View style={styles.headerContent}>
@@ -326,63 +323,93 @@ export default function ManagerMatches() {
               </View>
             </View>
           )}
-          {/* Recent Matches */}
-          <View style={styles.card}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.cardTitle}>Recent Matches</Text>
-              <Text style={styles.cardSubtitle}>Match history and performance overview</Text>
-            </View>
-            {loading ? (
+          {/* Recent Matches - grid of small cards (same layout as analyst review matches) */}
+          {loading ? (
+            <View style={styles.loadingWrap}>
               <Text style={styles.loadingText}>Loading...</Text>
-            ) : matches.length ? (
-              matches.map((m) => {
-                const result = m.goals_scored > m.goals_conceded ? "Win" : 
-                              m.goals_scored === m.goals_conceded ? "Draw" : "Loss";
-                
+            </View>
+          ) : matches.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <View style={styles.emptyIconLine} />
+              <Text style={styles.emptyTitle}>No matches yet</Text>
+              <Text style={styles.emptyText}>Match history will appear here once matches are recorded.</Text>
+            </View>
+          ) : (
+            <View style={styles.matchesGrid}>
+              {matches.map((m) => {
+                const result = m.goals_scored > m.goals_conceded
+                  ? { text: "W", color: "#0f172a", bg: "#e2e8f0" }
+                  : m.goals_scored === m.goals_conceded
+                    ? { text: "D", color: "#475569", bg: "#f1f5f9" }
+                    : { text: "L", color: "#64748b", bg: "#f8fafc" };
                 return (
-                  <TouchableOpacity
-                    key={m.id}
-                    style={styles.matchCard}
-                    onPress={() => router.push(`/manager/match/${m.id}`)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.matchContent}>
-                      <View style={styles.matchHeader}>
-                        <View style={styles.matchOpponent}>
-                          <Text style={styles.matchTitle}>vs {m.opponent}</Text>
-                          <Text style={styles.matchVenue}>{m.is_home ? "Home" : "Away"}</Text>
-                        </View>
-                        <View style={[styles.resultBadge, styles[`resultBadge${result}`]]}>
-                          <Text style={[styles.resultText, styles[`resultText${result}`]]}>{result}</Text>
-                        </View>
+                  <View key={m.id} style={styles.matchCard}>
+                    <View style={styles.matchCardHeader}>
+                      <View style={styles.matchCardHeaderLeft}>
+                        <Text style={styles.matchCardOpponent}>vs {m.opponent}</Text>
+                        <Text style={styles.matchCardDate}>
+                          {m.kickoff_at
+                            ? new Date(m.kickoff_at).toLocaleDateString("en-US", {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            : "No date"}
+                        </Text>
+                        {m.season && (
+                          <Text style={styles.matchCardSeason}>Season: {m.season}</Text>
+                        )}
                       </View>
-                      
-                      <View style={styles.matchDetails}>
-                        <View style={styles.matchScore}>
-                          <Text style={styles.scoreValue}>{m.goals_scored || 0}</Text>
-                          <Text style={styles.scoreSeparator}>—</Text>
-                          <Text style={styles.scoreValue}>{m.goals_conceded || 0}</Text>
-                        </View>
-                        <View style={styles.matchMeta}>
-                          <Text style={styles.metaText}>{formatKickoff(m.kickoff_at)}</Text>
-                          {m.formation && (
-                            <Text style={styles.metaText}>Formation: {m.formation}</Text>
-                          )}
-                          {m.xg !== undefined && (
-                            <Text style={styles.metaText}>xG: {parseFloat(m.xg || 0).toFixed(2)}</Text>
-                          )}
-                        </View>
+                      <View style={[styles.matchCardResultBadge, { backgroundColor: result.bg }]}>
+                        <Text style={[styles.matchCardResultText, { color: result.color }]}>{result.text}</Text>
                       </View>
                     </View>
-                  </TouchableOpacity>
+
+                    <View style={styles.matchCardScore}>
+                      <View style={styles.matchCardScoreItem}>
+                        <Text style={styles.matchCardScoreLabel}>Our Goals</Text>
+                        <Text style={styles.matchCardScoreValue}>{m.goals_scored || 0}</Text>
+                      </View>
+                      <Text style={styles.matchCardScoreDivider}>-</Text>
+                      <View style={styles.matchCardScoreItem}>
+                        <Text style={styles.matchCardScoreLabel}>Opponent Goals</Text>
+                        <Text style={styles.matchCardScoreValue}>{m.goals_conceded || 0}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.matchCardDetails}>
+                      {m.formation && (
+                        <View style={styles.matchCardDetailItem}>
+                          <Text style={styles.matchCardDetailLabel}>Formation</Text>
+                          <Text style={styles.matchCardDetailValue}>{m.formation}</Text>
+                        </View>
+                      )}
+                      <View style={styles.matchCardDetailItem}>
+                        <Text style={styles.matchCardDetailLabel}>Venue</Text>
+                        <Text style={styles.matchCardDetailValue}>{m.is_home ? "Home" : "Away"}</Text>
+                      </View>
+                      <View style={styles.matchCardDetailItem}>
+                        <Text style={styles.matchCardDetailLabel}>Status</Text>
+                        <Text style={[styles.matchCardDetailValue, styles.matchCardStatusText]}>
+                          {m.state || "not_started"}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.matchCardViewButton}
+                      onPress={() => router.push(`/manager/match/${m.id}`)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.matchCardViewButtonText}>View Details</Text>
+                    </TouchableOpacity>
+                  </View>
                 );
-              })
-            ) : (
-              <View style={styles.empty}>
-                <Text style={styles.emptyText}>No matches yet</Text>
-              </View>
-            )}
-          </View>
+              })}
+            </View>
+          )}
           <View style={{ height: 24 }} />
         </ScrollView>
       </View>
@@ -665,124 +692,185 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     marginTop: 4,
   },
-  matchCard: {
-    padding: 20,
-    marginBottom: 16,
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  matchContent: {
-    flex: 1,
-  },
-  matchHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 16,
-  },
-  matchOpponent: {
-    flex: 1,
-  },
-  matchTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#0f172a",
-    marginBottom: 4,
-    letterSpacing: -0.2,
-  },
-  matchVenue: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#64748b",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  resultBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  resultBadgeWin: {
-    backgroundColor: "#f0fdf4",
-    borderColor: "#bbf7d0",
-  },
-  resultBadgeDraw: {
-    backgroundColor: "#fffbeb",
-    borderColor: "#fde68a",
-  },
-  resultBadgeLoss: {
-    backgroundColor: "#fef2f2",
-    borderColor: "#fecaca",
-  },
-  resultText: {
-    fontSize: 12,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  resultTextWin: {
-    color: "#059669",
-  },
-  resultTextDraw: {
-    color: "#d97706",
-  },
-  resultTextLoss: {
-    color: "#dc2626",
-  },
-  matchDetails: {
-    borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
-    paddingTop: 16,
-  },
-  matchScore: {
-    flexDirection: "row",
+  loadingWrap: {
+    padding: 32,
     alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-    gap: 12,
-  },
-  scoreValue: {
-    fontSize: 36,
-    fontWeight: "800",
-    color: "#0f172a",
-    letterSpacing: -1,
-  },
-  scoreSeparator: {
-    fontSize: 24,
-    fontWeight: "600",
-    color: "#94a3b8",
-  },
-  matchMeta: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 16,
-    justifyContent: "center",
-  },
-  metaText: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#64748b",
   },
   loadingText: {
     fontSize: 14,
     color: "#6b7280",
     textAlign: "center",
-    padding: 20,
   },
-  empty: {
-    padding: 32,
+  emptyCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 56,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  emptyIconLine: {
+    width: 48,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: "#e2e8f0",
+    marginBottom: 24,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#0f172a",
+    marginBottom: 10,
+    letterSpacing: -0.3,
   },
   emptyText: {
     fontSize: 14,
-    color: "#6b7280",
+    fontWeight: "500",
+    color: "#64748b",
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  matchesGrid: {
+    gap: 20,
+    ...Platform.select({
+      web: {
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
+        gap: "20px",
+      },
+    }),
+  },
+  matchCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  matchCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 20,
+  },
+  matchCardHeaderLeft: {
+    flex: 1,
+  },
+  matchCardOpponent: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#0f172a",
+    marginBottom: 6,
+    letterSpacing: -0.3,
+  },
+  matchCardDate: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#64748b",
+    marginBottom: 4,
+  },
+  matchCardSeason: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#94a3b8",
+    marginTop: 4,
+  },
+  matchCardResultBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  matchCardResultText: {
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  matchCardScore: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 20,
+    marginBottom: 20,
+    backgroundColor: "#f8fafc",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
+    gap: 20,
+  },
+  matchCardScoreItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  matchCardScoreLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#64748b",
+    marginBottom: 6,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  matchCardScoreValue: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: "#0f172a",
+    letterSpacing: -0.5,
+  },
+  matchCardScoreDivider: {
+    fontSize: 20,
+    fontWeight: "500",
+    color: "#94a3b8",
+  },
+  matchCardDetails: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 16,
+    marginBottom: 20,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  matchCardDetailItem: {
+    flex: 1,
+    minWidth: 90,
+  },
+  matchCardDetailLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#64748b",
+    marginBottom: 4,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  matchCardDetailValue: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#0f172a",
+  },
+  matchCardStatusText: {
+    textTransform: "capitalize",
+  },
+  matchCardViewButton: {
+    backgroundColor: "#0f172a",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  matchCardViewButtonText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: 0.3,
   },
 });

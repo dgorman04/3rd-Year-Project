@@ -1,10 +1,11 @@
 // app/home.jsx - Unified home dashboard with team overview
 import React, { useEffect, useState, useMemo } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform, Image, Dimensions } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform, Dimensions } from "react-native";
 import { router } from "expo-router";
 import { Picker } from "@react-native-picker/picker";
 import { BarChart, LineChart, PieChart } from "react-native-chart-kit";
 import AppLayout from "../components/AppLayout";
+import PitchVisualization from "../components/PitchVisualization";
 import { API, ngrokHeaders } from "../lib/config";
 import { getToken, clearToken } from "../lib/auth";
 
@@ -34,6 +35,7 @@ export default function Home() {
   const [availableSeasons, setAvailableSeasons] = useState([]);
   const [eventInstances, setEventInstances] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -51,16 +53,20 @@ export default function Home() {
   useEffect(() => {
     if (!token) return;
     (async () => {
-      const userRole = user?.role || "analyst";
-      if (userRole === "manager" || userRole === "analyst") {
-        const seasonParam = selectedSeason ? `?season=${encodeURIComponent(selectedSeason)}` : "";
-        const perfRes = await fetch(`${API}/teams/performance-stats/${seasonParam}`, {
-          headers: { Authorization: `Bearer ${token}`, ...ngrokHeaders() },
-        });
-        const perfData = await perfRes.json().catch(() => ({}));
-        if (perfRes.ok) {
-          setTeamPerformance(perfData);
+      try {
+        const userRole = user?.role || "analyst";
+        if (userRole === "manager" || userRole === "analyst") {
+          const seasonParam = selectedSeason ? `?season=${encodeURIComponent(selectedSeason)}` : "";
+          const perfRes = await fetch(`${API}/teams/performance-stats/${seasonParam}`, {
+            headers: { Authorization: `Bearer ${token}`, ...ngrokHeaders() },
+          });
+          const perfData = await perfRes.json().catch(() => ({}));
+          if (perfRes.ok) {
+            setTeamPerformance(perfData);
+          }
         }
+      } catch (e) {
+        console.log("Error loading team performance:", e);
       }
     })();
   }, [selectedSeason, token, user?.role]);
@@ -68,7 +74,8 @@ export default function Home() {
   const loadData = async (t, season = null) => {
     try {
       setLoading(true);
-      
+      setFetchError(null);
+
       // Fetch user profile
       const meRes = await fetch(`${API}/auth/me/`, {
         headers: { Authorization: `Bearer ${t}`, ...ngrokHeaders() },
@@ -109,6 +116,7 @@ export default function Home() {
       }
     } catch (e) {
       console.log("Error loading data:", e);
+      setFetchError(e?.message || "Failed to fetch");
     } finally {
       setLoading(false);
     }
@@ -191,22 +199,22 @@ export default function Home() {
 
   // Prepare chart data
   const chartData = useMemo(() => {
-    // Points Gained Over Time (Last 10 Matches - Cumulative Points)
+    // Points per match (0 = loss, 1 = draw, 3 = win) – last 10 matches, so form/dips are visible
     const recentMatches = filteredMatches.slice(0, 10).reverse(); // Get last 10, reverse to show oldest to newest
     let cumulativePoints = 0;
     const pointsData = recentMatches.map((match, index) => {
-      let points = 0;
+      let matchPoints = 0;
       const goalsScored = match.goals_scored || 0;
       const goalsConceded = match.goals_conceded || 0;
-      if (goalsScored > goalsConceded) points = 3; // Win
-      else if (goalsScored === goalsConceded) points = 1; // Draw
-      else points = 0; // Loss
+      if (goalsScored > goalsConceded) matchPoints = 3; // Win
+      else if (goalsScored === goalsConceded) matchPoints = 1; // Draw
+      else matchPoints = 0; // Loss
       
-      cumulativePoints += points;
+      cumulativePoints += matchPoints;
       return {
         match: index + 1,
         points: cumulativePoints,
-        matchPoints: points,
+        matchPoints,
         opponent: match.opponent || 'Unknown',
         result: goalsScored > goalsConceded ? 'W' : goalsScored === goalsConceded ? 'D' : 'L',
       };
@@ -216,7 +224,7 @@ export default function Home() {
       labels: pointsData.map((_, i) => `GW${i + 1}`),
       datasets: [
         {
-          data: pointsData.map(d => d.points),
+          data: pointsData.map(d => d.matchPoints),
           color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
           strokeWidth: 2,
         },
@@ -247,32 +255,36 @@ export default function Home() {
 
     // Goals Trend by Game Week (Last 10 Matches)
     const recentMatchesForGoals = filteredMatches.slice(0, 10).reverse(); // Get last 10, reverse to show oldest to newest
+    const scored = recentMatchesForGoals.length > 0
+      ? recentMatchesForGoals.map(m => m.goals_scored || 0)
+      : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    const conceded = recentMatchesForGoals.length > 0
+      ? recentMatchesForGoals.map(m => m.goals_conceded || 0)
+      : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    const goalsTrendMax = Math.max(1, ...scored, ...conceded);
     const goalsTrendData = {
-      labels: recentMatchesForGoals.length > 0 
+      labels: recentMatchesForGoals.length > 0
         ? recentMatchesForGoals.map((_, i) => `GW${i + 1}`)
         : ['GW1', 'GW2', 'GW3', 'GW4', 'GW5', 'GW6', 'GW7', 'GW8', 'GW9', 'GW10'],
       datasets: [
         {
-          data: recentMatchesForGoals.length > 0 
-            ? recentMatchesForGoals.map(m => m.goals_scored || 0)
-            : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-          color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`, // blue
-          strokeWidth: 3,
+          data: scored,
+          color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
+          strokeWidth: 2,
         },
         {
-          data: recentMatchesForGoals.length > 0
-            ? recentMatchesForGoals.map(m => m.goals_conceded || 0)
-            : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-          color: (opacity = 1) => `rgba(239, 68, 68, ${opacity})`, // red
-          strokeWidth: 3,
+          data: conceded,
+          color: (opacity = 1) => `rgba(239, 68, 68, ${opacity})`,
+          strokeWidth: 2,
         },
       ],
+      segments: goalsTrendMax,
     };
 
     return { 
       pointsProgressionData: pointsProgressionData || { labels: [], datasets: [], matchDetails: [] }, 
       zoneAnalysisData: zoneAnalysisData || { zoneCounts: {}, total: 0, zonePercentages: [] }, 
-      goalsTrendData: goalsTrendData || { labels: [], datasets: [] }
+      goalsTrendData: goalsTrendData || { labels: [], datasets: [], segments: 1 }
     };
   }, [filteredMatches, eventInstances]);
 
@@ -325,6 +337,29 @@ export default function Home() {
     );
   }
 
+  // API unreachable (e.g. ngrok not running or wrong URL)
+  if (fetchError) {
+    return (
+      <AppLayout>
+        <View style={styles.container}>
+          <View style={styles.loadingContainer}>
+            <Text style={styles.errorTitle}>Can't reach server</Text>
+            <Text style={styles.errorText}>
+              {fetchError}. Make sure ngrok is running (ngrok http 8000) and that
+              EXPO_PUBLIC_API_BASE in .env matches your ngrok URL. Restart Expo after changing .env.
+            </Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => token && loadData(token, selectedSeason)}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </AppLayout>
+    );
+  }
+
   // If no token, redirect to login (but don't block rendering if we have data)
   if (!token) {
     return (
@@ -364,44 +399,37 @@ export default function Home() {
             }),
           }}
         >
-          {/* Season Filter */}
-          {availableSeasons.length > 0 && (
-            <View style={styles.filterCard}>
-              <View style={styles.filterHeader}>
-                <Text style={styles.filterLabel}>Filter by Season</Text>
-                {selectedSeason && (
-                  <View style={styles.filterBadge}>
-                    <Text style={styles.filterBadgeText}>{selectedSeason}</Text>
-                  </View>
-                )}
-              </View>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={selectedSeason || "all"}
-                  onValueChange={(value) => setSelectedSeason(value === "all" ? null : value)}
-                  style={styles.picker}
-                >
-                  <Picker.Item label="All Seasons" value="all" />
-                  {availableSeasons.map((season) => (
-                    <Picker.Item key={season} label={season} value={season} />
-                  ))}
-                </Picker>
-              </View>
+          {/* Season Filter - always show so it works on iPhone (Picker needs visible container; iOS needs itemStyle) */}
+          <View style={styles.filterCard}>
+            <View style={styles.filterHeader}>
+              <Text style={styles.filterLabel}>Filter by Season</Text>
+              {selectedSeason && (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{selectedSeason}</Text>
+                </View>
+              )}
             </View>
-          )}
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={selectedSeason || "all"}
+                onValueChange={(value) => setSelectedSeason(value === "all" ? null : value)}
+                style={styles.picker}
+                itemStyle={Platform.OS === "ios" ? styles.pickerItemIOS : undefined}
+                prompt="Season"
+              >
+                <Picker.Item label="All Seasons" value="all" />
+                {availableSeasons.map((season) => (
+                  <Picker.Item key={season} label={String(season)} value={season} />
+                ))}
+              </Picker>
+            </View>
+          </View>
 
           {/* Team Overview Card */}
           {team && (
             <View style={styles.overviewCard}>
               <View style={styles.overviewHeader}>
                 <View style={styles.teamHeaderRow}>
-                  {team.badge_url ? (
-                    <Image source={{ uri: team.badge_url }} style={styles.teamBadge} />
-                  ) : (
-                    <View style={styles.teamBadgePlaceholder}>
-                      <Text style={styles.teamBadgeText}>{team.team_name?.charAt(0) || 'T'}</Text>
-                    </View>
-                  )}
                   <View style={styles.teamInfoContainer}>
                     <Text style={styles.teamName}>{team.team_name}</Text>
                     {selectedSeason && (
@@ -479,8 +507,8 @@ export default function Home() {
             {/* Points Gained Over Time Chart (Last 10 Matches) */}
             {chartData?.pointsProgressionData?.labels && chartData.pointsProgressionData.labels.length > 0 && (
               <View style={styles.chartCard}>
-                <Text style={styles.chartTitle}>Points Gained Over Time</Text>
-                <Text style={styles.chartSubtitle}>Last 10 Matches</Text>
+                <Text style={styles.chartTitle}>Form (Points per Match)</Text>
+                <Text style={styles.chartSubtitle}>Last 10 Matches — 0 = Loss, 1 = Draw, 3 = Win</Text>
                 <LineChart
                   data={chartData.pointsProgressionData}
                   width={Platform.OS === "web" ? screenW - 320 : screenW - 80}
@@ -501,6 +529,7 @@ export default function Home() {
                   bezier
                   style={styles.chart}
                   fromZero
+                  yAxisInterval={1}
                 />
                 <View style={styles.legend}>
                   <View style={styles.legendItem}>
@@ -537,7 +566,7 @@ export default function Home() {
 
             {/* Charts Row - Compact Side by Side */}
             <View style={styles.chartsRowCompact}>
-              {/* Zone Analysis - Compact Pitch Visualization */}
+              {/* Zone Analysis - Same pitch as other heatmaps, keep percentages/counts */}
               <View style={styles.chartCardCompact}>
                 <View style={styles.chartHeader}>
                   <View>
@@ -546,7 +575,6 @@ export default function Home() {
                   </View>
                 </View>
 
-                {/* Compact Pitch Visualization */}
                 {(() => {
                   const data = chartData?.zoneAnalysisData;
                   if (!data || data.total === 0) {
@@ -557,94 +585,35 @@ export default function Home() {
                     );
                   }
 
-                  // Zone layout: 2 columns, 3 rows (pairs going down)
-                  const zoneLayout = [
-                    { zone: "1", label: "Zone 1", row: 0 },
-                    { zone: "2", label: "Zone 2", row: 0 },
-                    { zone: "3", label: "Zone 3", row: 1 },
-                    { zone: "4", label: "Zone 4", row: 1 },
-                    { zone: "5", label: "Zone 5", row: 2 },
-                    { zone: "6", label: "Zone 6", row: 2 },
-                  ];
+                  const heatMapData = {
+                    defensive_left: data.zoneCounts["1"] || 0,
+                    defensive_center: data.zoneCounts["2"] || 0,
+                    defensive_right: data.zoneCounts["3"] || 0,
+                    attacking_left: data.zoneCounts["4"] || 0,
+                    attacking_center: data.zoneCounts["5"] || 0,
+                    attacking_right: data.zoneCounts["6"] || 0,
+                  };
+
+                  const zoneNumToId = { "1": "defensive_left", "2": "defensive_center", "3": "defensive_right", "4": "attacking_left", "5": "attacking_center", "6": "attacking_right" };
+                  const zoneLabels = {};
+                  data.zonePercentages.forEach((z) => {
+                    const num = z.zone.replace("Zone ", "");
+                    const id = zoneNumToId[num];
+                    if (id) zoneLabels[id] = `${z.percentage}%`;
+                  });
 
                   return (
                     <View style={styles.pitchContainerCompact}>
-                      <View style={styles.totalEventsContainer}>
-                        <Text style={styles.totalEventsLabel}>Total Events</Text>
-                        <Text style={styles.totalEventsValue}>{data.total}</Text>
+                      <View style={styles.zoneAnalysisPitchWrapper}>
+                        <PitchVisualization
+                          width={Math.min(screenW - 72, 380)}
+                          height={300}
+                          heatMapData={heatMapData}
+                          zoneLabels={zoneLabels}
+                          minimalContainer
+                        />
                       </View>
-                      
-                      <View style={styles.pitchFieldCompact}>
-                        {/* Opponent Goal (Top) */}
-                        <View style={styles.pitchGoalTopCompact}>
-                          <Text style={styles.pitchGoalLabelCompact}>Opponent</Text>
-                        </View>
-                        
-                        {/* Pitch Zones - 2 columns, 3 rows */}
-                        <View style={styles.pitchZonesContainerCompact}>
-                          {zoneLayout.map((layout) => {
-                            const zoneData = data.zonePercentages.find(z => z.zone === `Zone ${layout.zone}`);
-                            if (!zoneData) return null;
-                            
-                            const percentage = zoneData.percentage;
-                            // Premium color gradient
-                            let r, g, b;
-                            if (percentage < 5) {
-                              r = 240; g = 245; b = 240;
-                            } else if (percentage >= 5 && percentage < 15) {
-                              const t = (percentage - 5) / 10;
-                              r = Math.floor(34 + t * 30);
-                              g = Math.floor(197 + t * 35);
-                              b = Math.floor(94 + t * 20);
-                            } else if (percentage >= 15 && percentage < 30) {
-                              const t = (percentage - 15) / 15;
-                              r = Math.floor(64 + t * 120);
-                              g = Math.floor(232 + t * 15);
-                              b = Math.floor(114 - t * 70);
-                            } else {
-                              const t = Math.min(1, (percentage - 30) / 20);
-                              r = Math.floor(184 + t * 71);
-                              g = Math.floor(247 - t * 100);
-                              b = Math.floor(44 - t * 44);
-                            }
-                            const zoneColor = `rgb(${r}, ${g}, ${b})`;
-
-                            return (
-                              <View 
-                                key={layout.zone} 
-                                style={[
-                                  styles.pitchZoneCompact,
-                                  { 
-                                    backgroundColor: zoneColor,
-                                    borderColor: percentage > 10 ? "rgba(255, 255, 255, 0.8)" : "rgba(229, 231, 235, 0.6)",
-                                  }
-                                ]}
-                              >
-                                <View style={styles.pitchZoneContentCompact}>
-                                  <View style={styles.pitchZoneHeaderCompact}>
-                                    <Text style={styles.pitchZoneLabelCompact}>Z{layout.zone}</Text>
-                                    <Text style={styles.pitchZonePercentageCompact}>{percentage}%</Text>
-                                  </View>
-                                  <Text style={styles.pitchZoneCountCompact}>{zoneData.count}</Text>
-                                  <View style={styles.pitchZoneBarCompact}>
-                                    <View 
-                                      style={[
-                                        styles.pitchZoneBarFill,
-                                        { width: `${percentage}%` }
-                                      ]}
-                                    />
-                                  </View>
-                                </View>
-                              </View>
-                            );
-                          })}
-                        </View>
-                        
-                        {/* Our Goal (Bottom) */}
-                        <View style={styles.pitchGoalBottomCompact}>
-                          <Text style={styles.pitchGoalLabelCompact}>Our Goal</Text>
-                        </View>
-                      </View>
+                      <Text style={styles.zoneAnalysisTotalCaption}>Total events: {data.total}</Text>
                     </View>
                   );
                 })()}
@@ -662,42 +631,27 @@ export default function Home() {
                   {chartData?.goalsTrendData ? (
                     <LineChart
                       data={chartData.goalsTrendData}
-                    width={Platform.OS === "web" ? 500 : screenW - 80}
-                    height={320}
-                    chartConfig={{
-                      backgroundColor: "transparent",
-                      backgroundGradientFrom: "#f8fafc",
-                      backgroundGradientTo: "#ffffff",
-                      decimalPlaces: 0,
-                      color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
-                      labelColor: (opacity = 1) => `rgba(71, 85, 105, ${opacity})`,
-                      strokeWidth: 3,
-                      barPercentage: 0.7,
-                      style: {
-                        borderRadius: 16,
-                      },
-                      propsForDots: {
-                        r: "7",
-                        strokeWidth: "4",
-                        stroke: "#ffffff",
-                      },
-                      propsForBackgroundLines: {
-                        strokeDasharray: "", // solid lines
-                        stroke: "#e2e8f0",
-                        strokeWidth: 1.5,
-                      },
-                      fillShadowGradient: "#3b82f6",
-                      fillShadowGradientOpacity: 0.1,
-                    }}
-                    bezier
-                    style={styles.premiumChart}
-                    fromZero
-                    withInnerLines={true}
-                    withOuterLines={false}
-                    withVerticalLabels={true}
-                    withHorizontalLabels={true}
-                    withShadow={true}
-                />
+                      width={Math.min(screenW - 72, 440)}
+                      height={260}
+                      chartConfig={{
+                        backgroundColor: "#ffffff",
+                        backgroundGradientFrom: "#ffffff",
+                        backgroundGradientTo: "#ffffff",
+                        decimalPlaces: 0,
+                        color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
+                        labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                        style: { borderRadius: 16 },
+                        propsForDots: {
+                          r: "5",
+                          strokeWidth: "2",
+                        },
+                      }}
+                      bezier
+                      style={styles.chart}
+                      fromZero
+                      segments={chartData.goalsTrendData.segments ?? 2}
+                      yAxisInterval={1}
+                    />
                   ) : (
                     <View style={styles.heatmapEmptyState}>
                       <Text style={styles.heatmapEmptyText}>No goals data available</Text>
@@ -747,6 +701,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     color: "#6b7280",
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  errorText: {
+    fontSize: 14,
+    color: "#6b7280",
+    textAlign: "center",
+    maxWidth: 320,
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  retryButton: {
+    backgroundColor: "#1e40af",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  retryButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#ffffff",
   },
   webHeader: {
     padding: 24,
@@ -994,33 +974,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#f9fafb",
     color: "#111827",
     height: 50,
+    ...Platform.select({
+      ios: { width: "100%" },
+      default: {},
+    }),
+  },
+  pickerItemIOS: {
+    fontSize: 16,
+    color: "#111827",
   },
   teamHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 16,
-  },
-  teamBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 2,
-    borderColor: "#e5e7eb",
-  },
-  teamBadgePlaceholder: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "#3b82f6",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#e5e7eb",
-  },
-  teamBadgeText: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#ffffff",
   },
   teamInfoContainer: {
     flex: 1,
@@ -1557,9 +1522,8 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     textAlign: "center",
   },
-  // Compact Pitch Visualization Styles
   pitchContainerCompact: {
-    marginBottom: 12,
+    marginBottom: 0,
   },
   pitchEventSubtitleCompact: {
     fontSize: 11,
@@ -1568,28 +1532,22 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textAlign: "center",
   },
-  totalEventsContainer: {
-    backgroundColor: "#f9fafb",
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
+  zoneAnalysisPitchWrapper: {
     alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+    backgroundColor: "rgba(248,250,252,0.6)",
   },
-  totalEventsLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#6b7280",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  totalEventsValue: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#374151",
-    letterSpacing: -0.5,
+  zoneAnalysisTotalCaption: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#94a3b8",
+    textAlign: "center",
+    letterSpacing: 0.3,
   },
   premiumChart: {
     marginVertical: 8,
@@ -1726,6 +1684,7 @@ const styles = StyleSheet.create({
   },
   goalsChartContainer: {
     marginTop: 8,
+    alignItems: "center",
   },
   heatmapLegend: {
     flexDirection: "row",

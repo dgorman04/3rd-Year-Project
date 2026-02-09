@@ -2,7 +2,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Dimensions, Platform } from "react-native";
 import { router } from "expo-router";
-import AppHeader from "../../components/AppHeader";
 import AppLayout from "../../components/AppLayout";
 import KPICard from "../../components/KPICard";
 import { API, ngrokHeaders } from "../../lib/config";
@@ -169,6 +168,13 @@ export default function OverallStats() {
     };
   }, [matches]);
 
+  // Max y value for formation bar chart (unique y-axis labels)
+  const formationYMax = useMemo(() => {
+    if (!formationData.datasets?.length) return 1;
+    const allValues = formationData.datasets.flatMap((d) => d.data || []);
+    return Math.max(1, ...allValues);
+  }, [formationData]);
+
   // Calculate team attributes from actual stats
   const teamAttributes = useMemo(() => {
     if (!stats.length) return [];
@@ -254,11 +260,17 @@ export default function OverallStats() {
     };
   }, [matches]);
 
+  // Max y value for period bar chart (unique y-axis labels)
+  const periodYMax = useMemo(() => {
+    if (!periodData.datasets?.length) return 1;
+    const allValues = periodData.datasets.flatMap((d) => d.data || []);
+    return Math.max(1, ...allValues);
+  }, [periodData]);
+
   if (loading) {
     return (
       <AppLayout>
         <View style={styles.container}>
-          {Platform.OS !== "web" && <AppHeader subtitle="Team Statistics" />}
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#0f172a" />
             <Text style={styles.loadingText}>Loading statistics...</Text>
@@ -271,8 +283,6 @@ export default function OverallStats() {
   return (
     <AppLayout>
       <View style={styles.container}>
-        {Platform.OS !== "web" && <AppHeader subtitle="Team Statistics" />}
-        
         {Platform.OS === "web" && (
           <View style={styles.webHeader}>
             <View>
@@ -323,6 +333,7 @@ export default function OverallStats() {
             <View style={styles.chartCard}>
               <Text style={styles.chartTitle}>Formation Performance</Text>
               <BarChart
+              key={`formation-${formationData.labels.join("-")}-${formationData.datasets.map((d) => (d.data || []).join(",")).join(";")}`}
               data={{
                 labels: formationData.labels,
                 datasets: formationData.datasets,
@@ -338,10 +349,18 @@ export default function OverallStats() {
                 labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
                 style: { borderRadius: 16 },
                 barPercentage: 0.6,
+                formatYLabel: (value) => {
+                  const num = parseFloat(value);
+                  const r = Math.round(num);
+                  if (r >= 0 && Math.abs(num - r) < 0.001) return String(r);
+                  return "";
+                },
               }}
               style={styles.chart}
               showValuesOnTopOfBars
               fromZero
+              segments={formationYMax}
+              yAxisInterval={1}
             />
             <View style={styles.legend}>
               <View style={styles.legendItem}>
@@ -365,6 +384,7 @@ export default function OverallStats() {
             <View style={styles.chartCard}>
             <Text style={styles.chartTitle}>Team Attributes</Text>
             <BarChart
+              key={`team-attr-${teamAttributes.map((a) => a.value).join("-")}`}
               data={{
                 labels: teamAttributes.map((a) => a.name),
                 datasets: [
@@ -389,6 +409,8 @@ export default function OverallStats() {
               showValuesOnTopOfBars
               fromZero
               yAxisMax={100}
+              segments={5}
+              yAxisInterval={20}
             />
           </View>
           )}
@@ -398,6 +420,7 @@ export default function OverallStats() {
             <View style={styles.chartCard}>
             <Text style={styles.chartTitle}>Performance by Match Period</Text>
             <BarChart
+              key={`period-${periodData.datasets.map((d) => (d.data || []).join(",")).join(";")}`}
               data={{
                 labels: periodData.labels,
                 datasets: periodData.datasets,
@@ -417,6 +440,8 @@ export default function OverallStats() {
               style={styles.chart}
               showValuesOnTopOfBars
               fromZero
+              segments={periodYMax}
+              yAxisInterval={1}
             />
             <View style={styles.legend}>
               <View style={styles.legendItem}>

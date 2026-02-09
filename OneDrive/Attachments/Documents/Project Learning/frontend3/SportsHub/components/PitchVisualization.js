@@ -10,8 +10,13 @@ export default function PitchVisualization({
   height = 600,
   events = [],
   heatMapData = null,
+  zoneLabels = null,
+  minimalContainer = false,
   onZoneClick = null,
   selectedZone = null,
+  pitchColor = "#0b8a5a",
+  pitchLineColor = "#ffffff",
+  zoneFillColor = "#10b981",
 }) {
   const pitchWidth = width;
   const pitchHeight = height;
@@ -33,7 +38,7 @@ export default function PitchVisualization({
 
   // Calculate heat map colors based on event density
   const getHeatColor = (zoneId) => {
-    if (!heatMapData) return "#10b981"; // Default green
+    if (!heatMapData) return zoneFillColor; // Default zone tint
     const count = heatMapData[zoneId] || 0;
     const maxCount = Math.max(...Object.values(heatMapData || {}), 1);
     const intensity = count / maxCount;
@@ -47,7 +52,7 @@ export default function PitchVisualization({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, minimalContainer && styles.containerMinimal]}>
       <Svg width={pitchWidth} height={pitchHeight} viewBox={`0 0 ${pitchWidth} ${pitchHeight}`}>
         {/* Pitch background */}
         <Rect
@@ -55,8 +60,8 @@ export default function PitchVisualization({
           y="0"
           width={pitchWidth}
           height={pitchHeight}
-          fill="#10b981"
-          stroke="#ffffff"
+          fill={pitchColor}
+          stroke={pitchLineColor}
           strokeWidth="2"
         />
 
@@ -93,6 +98,20 @@ export default function PitchVisualization({
             >
               {zone.zoneNum}
             </Text>
+            {/* Optional label (e.g. percentage) on the zone */}
+            {zoneLabels && zoneLabels[zone.id] != null && (
+              <Text
+                x={zone.x + zone.width / 2}
+                y={zone.y + zone.height / 2 + Math.min(zone.width, zone.height) * 0.22}
+                fontSize={Math.min(zone.width, zone.height) * 0.14}
+                fontWeight="800"
+                fill="#ffffff"
+                textAnchor="middle"
+                dominantBaseline="middle"
+              >
+                {zoneLabels[zone.id]}
+              </Text>
+            )}
           </React.Fragment>
         ))}
 
@@ -102,7 +121,7 @@ export default function PitchVisualization({
           y1={centerY}
           x2={pitchWidth}
           y2={centerY}
-          stroke="#ffffff"
+          stroke={pitchLineColor}
           strokeWidth="2"
         />
 
@@ -112,7 +131,7 @@ export default function PitchVisualization({
           cy={centerY}
           r={pitchHeight * 0.15}
           fill="none"
-          stroke="#ffffff"
+          stroke={pitchLineColor}
           strokeWidth="2"
         />
 
@@ -123,7 +142,7 @@ export default function PitchVisualization({
           width={pitchWidth * 0.2}
           height={pitchHeight * 0.6}
           fill="none"
-          stroke="#ffffff"
+          stroke={pitchLineColor}
           strokeWidth="2"
         />
         <Rect
@@ -132,7 +151,7 @@ export default function PitchVisualization({
           width={pitchWidth * 0.2}
           height={pitchHeight * 0.6}
           fill="none"
-          stroke="#ffffff"
+          stroke={pitchLineColor}
           strokeWidth="2"
         />
 
@@ -194,5 +213,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#f9fafb",
     borderRadius: 12,
     padding: 16,
+  },
+  containerMinimal: {
+    backgroundColor: "transparent",
+    padding: 8,
+    borderRadius: 10,
   },
 });

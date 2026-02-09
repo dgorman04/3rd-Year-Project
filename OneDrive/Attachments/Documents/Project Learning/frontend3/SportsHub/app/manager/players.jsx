@@ -2,7 +2,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform, TextInput, ActivityIndicator } from "react-native";
 import { router } from "expo-router";
-import AppHeader from "../../components/AppHeader";
 import AppLayout from "../../components/AppLayout";
 import { API, ngrokHeaders } from "../../lib/config";
 import { getToken, clearToken } from "../../lib/auth";
@@ -169,7 +168,6 @@ export default function ManagerPlayers() {
     return (
       <AppLayout>
         <View style={{ flex: 1, backgroundColor: "#f8f9fa" }}>
-          {Platform.OS !== "web" && <AppHeader subtitle="Players" />}
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#0f172a" />
             <Text style={styles.loadingText}>Loading player data...</Text>
@@ -227,17 +225,6 @@ export default function ManagerPlayers() {
   return (
     <AppLayout>
       <View style={{ flex: 1, backgroundColor: "#f8f9fa" }}>
-        {Platform.OS !== "web" && (
-          <AppHeader 
-            subtitle="Players"
-            rightAction={
-              <TouchableOpacity onPress={() => setEditMode(!editMode)}>
-                <Text style={styles.editButtonText}>{editMode ? "Done" : "Edit"}</Text>
-              </TouchableOpacity>
-            }
-          />
-        )}
-
         {Platform.OS === "web" && (
           <View style={styles.webHeader}>
             <View style={styles.headerContent}>
@@ -334,7 +321,6 @@ export default function ManagerPlayers() {
                         disabled={editMode}
                       >
                         <View style={[styles.playerCell, styles.colPlayer]}>
-                          <View style={styles.avatar} />
                           <Text style={styles.playerName}>{p.name}</Text>
                         </View>
                         <View style={[styles.colRating, styles.ratingCell]}>
@@ -537,13 +523,6 @@ const styles = StyleSheet.create({
   playerCell: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#e2e8f0",
   },
   playerName: {
     fontSize: 15,

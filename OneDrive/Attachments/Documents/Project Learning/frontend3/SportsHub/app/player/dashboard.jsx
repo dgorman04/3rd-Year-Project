@@ -1,10 +1,42 @@
 // app/player/dashboard.jsx - Player dashboard (view own profile and team stats)
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
+import React, { useEffect, useState, useMemo } from "react";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform, Dimensions } from "react-native";
 import { router } from "expo-router";
-import AppHeader from "../../components/AppHeader";
+import AppLayout from "../../components/AppLayout";
+import PitchVisualization from "../../components/PitchVisualization";
 import { API, ngrokHeaders } from "../../lib/config";
 import { getToken, clearToken } from "../../lib/auth";
+import { LineChart } from "react-native-chart-kit";
+
+const screenW = Dimensions.get("window").width;
+
+// Calculate player rating based on attacking and defensive stats
+function calculatePlayerRating(stats) {
+  const goals = stats.shots_on_target || 0;
+  const keyPasses = stats.key_passes || 0;
+  const shotsOffTarget = stats.shots_off_target || 0;
+  const tackles = stats.tackles || 0;
+  const interceptions = stats.interceptions || 0;
+  const clearances = stats.clearances || 0;
+  const blocks = stats.blocks || 0;
+  const duelsWon = stats.duels_won || 0;
+  const duelsLost = stats.duels_lost || 0;
+  const fouls = stats.fouls || 0;
+  
+  const totalDuels = duelsWon + duelsLost;
+  const duelWinRate = totalDuels > 0 ? duelsWon / totalDuels : 0;
+  
+  let rating = 5.0;
+  const attackingScore = (goals * 0.8) + (keyPasses * 0.3) - (shotsOffTarget * 0.1);
+  rating += Math.min(attackingScore * 0.15, 3.0);
+  const defensiveScore = (tackles * 0.4) + (interceptions * 0.5) + (clearances * 0.3) + (blocks * 0.4);
+  rating += Math.min(defensiveScore * 0.12, 2.0);
+  if (totalDuels > 0) {
+    rating += (duelWinRate - 0.5) * 0.5;
+  }
+  rating -= Math.min(fouls * 0.1, 1.0);
+  return Math.max(0, Math.min(10, rating));
+}
 
 const ALL_EVENTS = [
   "shots_on_target",
@@ -22,9 +54,13 @@ const ALL_EVENTS = [
 export default function PlayerDashboard() {
   const [token, setToken] = useState(null);
   const [playerData, setPlayerData] = useState(null);
-  const [teamStats, setTeamStats] = useState(null);
+  const [stats, setStats] = useState([]);
+  const [matches, setMatches] = useState([]);
+  const [eventInstances, setEventInstances] = useState([]);
   const [teamPerformance, setTeamPerformance] = useState(null);
   const [mlRecommendations, setMlRecommendations] = useState(null);
+  const [mlAnalysis, setMlAnalysis] = useState(null);
+  const [playerXG, setPlayerXG] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -52,7 +88,6 @@ export default function PlayerDashboard() {
 
   const loadData = async (t) => {
     try {
-      // Don't set loading to true on refresh - only on initial load
       if (!playerData) {
         setLoading(true);
       }
@@ -62,48 +97,98 @@ export default function PlayerDashboard() {
         headers: { Authorization: `Bearer ${t}`, ...ngrokHeaders() },
       });
       const profileData = await profileRes.json().catch(() => ({}));
-      if (profileRes.ok) {
-        setPlayerData(profileData);
+      if (!profileRes.ok) {
+        if (profileRes.status === 401) {
+          await clearToken();
+          router.replace("/");
+          return;
+        }
+        throw new Error("Failed to load player profile");
+      }
+      setPlayerData(profileData);
+      const playerId = profileData?.player?.id;
+      if (!playerId) {
+        setLoading(false);
+        return;
       }
 
-      // Load team stats
-      const statsRes = await fetch(`${API}/stats/`, {
+      // Load only this player's stats (never team-wide data)
+      const statsRes = await fetch(`${API}/players/me/stats/`, {
         headers: { Authorization: `Bearer ${t}`, ...ngrokHeaders() },
       });
       const statsData = await statsRes.json().catch(() => []);
       if (statsRes.ok) {
-        setTeamStats(Array.isArray(statsData) ? statsData : []);
+        setStats(Array.isArray(statsData) ? statsData : []);
       }
 
-      // Load team performance stats (goals, matches, etc.) - TEAM LEVEL, not player level
-      // Same endpoint as manager dashboard: /api/teams/performance-stats/
+      // Load matches
+      try {
+        const mRes = await fetch(`${API}/matches/`, {
+          headers: { Authorization: `Bearer ${t}`, ...ngrokHeaders() },
+        });
+        const mData = await mRes.json().catch(() => []);
+        if (mRes.ok && Array.isArray(mData)) {
+          setMatches(mData);
+          
+          // Load event instances for all matches for this player
+          const allEventInstances = [];
+          for (const match of mData) {
+            try {
+              const eventsRes = await fetch(`${API}/matches/${match.id}/events/`, {
+                headers: { Authorization: `Bearer ${t}`, ...ngrokHeaders() },
+              });
+              if (eventsRes.ok) {
+                const eventsData = await eventsRes.json().catch(() => []);
+                if (Array.isArray(eventsData)) {
+                  const playerEvents = eventsData.filter(e => e.player_id === playerId);
+                  allEventInstances.push(...playerEvents);
+                }
+              }
+            } catch (e) {
+              console.log(`Error loading events for match ${match.id}:`, e);
+            }
+          }
+          setEventInstances(allEventInstances);
+        }
+      } catch (e) {
+        console.log("Error loading matches:", e);
+      }
+
+      // Load player xG stats
+      try {
+        const xgRes = await fetch(`${API}/teams/player-xg-stats/`, {
+          headers: { Authorization: `Bearer ${t}`, ...ngrokHeaders() },
+        });
+        const xgData = await xgRes.json().catch(() => ({}));
+        if (xgRes.ok && Array.isArray(xgData?.player_xg)) {
+          const playerXGData = xgData.player_xg.find(p => p.player === profileData.player.name);
+          setPlayerXG(playerXGData?.xg || 0);
+        }
+      } catch (e) {
+        console.log("Error loading xG:", e);
+      }
+
+      // Load team performance stats
       try {
         const perfRes = await fetch(`${API}/teams/performance-stats/`, {
           headers: { Authorization: `Bearer ${t}`, ...ngrokHeaders() },
         });
         if (perfRes.ok) {
           const perfData = await perfRes.json().catch(() => ({}));
-          console.log("Player Dashboard - Team Performance Data:", perfData);
-          console.log("Team Goals Scored:", perfData?.goals?.scored);
-          console.log("Team Goals Conceded:", perfData?.goals?.conceded);
           setTeamPerformance(perfData);
-        } else {
-          const errorData = await perfRes.json().catch(() => ({}));
-          console.log("Failed to load team performance:", perfRes.status, errorData);
         }
       } catch (e) {
         console.log("Team performance fetch error:", e);
       }
 
       // Load ML recommendations
-      if (profileData?.player?.id) {
-        const mlRes = await fetch(`${API}/ml/performance-improvement/?player_id=${profileData.player.id}`, {
-          headers: { Authorization: `Bearer ${t}`, ...ngrokHeaders() },
-        });
-        const mlData = await mlRes.json().catch(() => ({}));
-        if (mlRes.ok) {
-          setMlRecommendations(mlData);
-        }
+      const mlRes = await fetch(`${API}/ml/performance-improvement/?player_id=${playerId}`, {
+        headers: { Authorization: `Bearer ${t}`, ...ngrokHeaders() },
+      });
+      const mlData = await mlRes.json().catch(() => ({}));
+      if (mlRes.ok) {
+        setMlRecommendations(mlData);
+        setMlAnalysis({ players: [{ player_id: playerId, player_name: profileData.player.name, ...mlData }] });
       }
     } catch (e) {
       console.log("Error loading data:", e);
@@ -115,6 +200,99 @@ export default function PlayerDashboard() {
     }
   };
 
+  const playerId = playerData?.player?.id;
+
+  // Calculate player KPIs from stats
+  const playerKPIs = useMemo(() => {
+    if (!playerId) return { goals: 0, xg: 0, keyPasses: 0, duelsWon: 0, tackles: 0, interceptions: 0, rating: 0 };
+    const playerStats = stats.filter(s => Number(s.player_id) === playerId);
+    
+    const goals = playerStats.filter(s => s.event === "shots_on_target").reduce((sum, s) => sum + (Number(s.count) || 0), 0);
+    const keyPasses = playerStats.filter(s => s.event === "key_passes").reduce((sum, s) => sum + (Number(s.count) || 0), 0);
+    const duelsWon = playerStats.filter(s => s.event === "duels_won").reduce((sum, s) => sum + (Number(s.count) || 0), 0);
+    const tackles = playerStats.filter(s => s.event === "tackles").reduce((sum, s) => sum + (Number(s.count) || 0), 0);
+    const interceptions = playerStats.filter(s => s.event === "interceptions").reduce((sum, s) => sum + (Number(s.count) || 0), 0);
+    
+    const allStats = {};
+    playerStats.forEach(s => {
+      allStats[s.event] = (allStats[s.event] || 0) + (Number(s.count) || 0);
+    });
+    const overallRating = calculatePlayerRating(allStats);
+    
+    return { goals, xg: playerXG, keyPasses, duelsWon, tackles, interceptions, rating: overallRating };
+  }, [stats, playerId, playerXG]);
+
+  // Calculate zone-based statistics and heatmap data
+  const zoneAnalysis = useMemo(() => {
+    const zoneStats = {};
+    const zoneEventCounts = {};
+    
+    eventInstances.forEach(instance => {
+      if (!instance.zone) return;
+      const zone = instance.zone.toString();
+      if (!zoneStats[zone]) {
+        zoneStats[zone] = { total: 0, attacking: 0, defensive: 0, events: {} };
+        zoneEventCounts[zone] = 0;
+      }
+      zoneStats[zone].total++;
+      zoneEventCounts[zone]++;
+      const event = instance.event;
+      zoneStats[zone].events[event] = (zoneStats[zone].events[event] || 0) + 1;
+      if (["shots_on_target", "shots_off_target", "key_passes"].includes(event)) {
+        zoneStats[zone].attacking++;
+      }
+      if (["tackles", "interceptions", "clearances", "blocks", "duels_won"].includes(event)) {
+        zoneStats[zone].defensive++;
+      }
+    });
+    
+    return { zoneStats, zoneEventCounts };
+  }, [eventInstances]);
+
+  // Prepare heatmap data
+  const heatmapData = useMemo(() => {
+    const { zoneEventCounts } = zoneAnalysis;
+    const zoneMap = {
+      "1": "defensive_left", "2": "defensive_center", "3": "defensive_right",
+      "4": "attacking_left", "5": "attacking_center", "6": "attacking_right",
+    };
+    const heatmap = {};
+    Object.entries(zoneEventCounts).forEach(([zone, count]) => {
+      const zoneId = zoneMap[zone];
+      if (zoneId) heatmap[zoneId] = count;
+    });
+    return heatmap;
+  }, [zoneAnalysis]);
+
+  // Calculate rating progression over time
+  const ratingProgression = useMemo(() => {
+    if (!playerId) return [];
+    const playerStats = stats.filter(s => Number(s.player_id) === playerId);
+    const matchRatings = {};
+    
+    playerStats.forEach(stat => {
+      const matchId = stat.match_id;
+      if (!matchId) return;
+      if (!matchRatings[matchId]) matchRatings[matchId] = {};
+      matchRatings[matchId][stat.event] = (matchRatings[matchId][stat.event] || 0) + (Number(stat.count) || 0);
+    });
+    
+    const ratings = Object.entries(matchRatings)
+      .map(([matchId, matchStats]) => {
+        const match = matches.find(m => m.id === Number(matchId));
+        const rating = calculatePlayerRating(matchStats);
+        return {
+          matchId: Number(matchId),
+          rating,
+          date: match?.kickoff_at ? new Date(match.kickoff_at) : new Date(),
+          matchName: match ? `${match.opponent} (${match.goals_scored || 0}-${match.goals_conceded || 0})` : `Match ${matchId}`,
+        };
+      })
+      .sort((a, b) => a.date - b.date);
+    
+    return ratings;
+  }, [stats, playerId, matches]);
+
   const handleLogout = async () => {
     await clearToken();
     router.replace("/");
@@ -122,424 +300,657 @@ export default function PlayerDashboard() {
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <AppHeader subtitle="Player Dashboard" />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#0f172a" />
-          <Text style={[styles.loadingText, { marginTop: 12 }]}>Loading...</Text>
+      <AppLayout>
+        <View style={styles.container}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#0f172a" />
+            <Text style={styles.loadingText}>Loading player data...</Text>
+          </View>
         </View>
-      </View>
+      </AppLayout>
     );
   }
 
-  // If no player data or no team, show join team option
   if (!playerData || !playerData.player || !playerData.team) {
     return (
-      <View style={styles.container}>
-        <AppHeader subtitle="Player Dashboard" />
-        <ScrollView contentContainerStyle={styles.content}>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Welcome!</Text>
-            <Text style={styles.cardDescription}>
-              Join a team to start viewing your stats and team performance.
-            </Text>
-            <TouchableOpacity
-              style={styles.joinTeamButton}
-              onPress={() => router.push("/player/join-team")}
-            >
-              <Text style={styles.joinTeamButtonText}>Join Team</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </View>
+      <AppLayout>
+        <View style={styles.container}>
+          <ScrollView contentContainerStyle={styles.content}>
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Welcome!</Text>
+              <Text style={styles.cardDescription}>
+                Join a team to start viewing your stats and team performance.
+              </Text>
+              <TouchableOpacity
+                style={styles.joinTeamButton}
+                onPress={() => router.push("/player/join-team")}
+              >
+                <Text style={styles.joinTeamButtonText}>Join Team</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </AppLayout>
     );
   }
 
-  const performance = playerData.performance || {};
   const player = playerData.player || {};
 
   return (
-    <View style={styles.container}>
-      <AppHeader subtitle="Player Dashboard" />
+    <AppLayout>
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Player Profile Card */}
-        <View style={[styles.card, { marginBottom: 16 }]}>
-          <Text style={styles.cardTitle}>My Profile</Text>
-          <Text style={styles.playerName}>{player.name}</Text>
-          <Text style={styles.teamName}>{player.team?.team_name || "No team"}</Text>
+        {/* Player Header */}
+        <View style={styles.headerCard}>
+          <View>
+            <Text style={styles.playerName}>{player?.name || "Player"}</Text>
+            <Text style={styles.teamName}>{playerData?.team?.team_name || "No team"}</Text>
+          </View>
+          <View style={styles.ratingBadge}>
+            <Text style={styles.ratingLabel}>Overall Rating</Text>
+            <Text style={styles.ratingValue}>{playerKPIs.rating.toFixed(1)}</Text>
+          </View>
         </View>
 
-        {/* Performance Stats */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>My Performance</Text>
-          <View style={styles.statsGrid}>
-            {ALL_EVENTS.map((event) => {
-              const stat = performance[event] || {};
-              return (
-                <View key={event} style={styles.statItem}>
-                  <Text style={styles.statLabel}>{event.replace("_", " ")}</Text>
-                  <Text style={styles.statValue}>{stat.total || 0}</Text>
-                  {stat.matches > 0 && (
-                    <Text style={styles.statSubtext}>
-                      {stat.average_per_match?.toFixed(1) || 0} per match
+        {/* KPI Cards */}
+        <View style={styles.kpiRow}>
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiValue}>{playerKPIs.goals}</Text>
+            <Text style={styles.kpiTitle}>Goals</Text>
+          </View>
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiValue}>{playerKPIs.xg.toFixed(2)}</Text>
+            <Text style={styles.kpiTitle}>Expected Goals</Text>
+          </View>
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiValue}>{playerKPIs.keyPasses}</Text>
+            <Text style={styles.kpiTitle}>Key Passes</Text>
+          </View>
+        </View>
+
+        <View style={styles.kpiRow}>
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiValue}>{playerKPIs.duelsWon}</Text>
+            <Text style={styles.kpiTitle}>Duels Won</Text>
+          </View>
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiValue}>{playerKPIs.tackles}</Text>
+            <Text style={styles.kpiTitle}>Tackles</Text>
+          </View>
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiValue}>{playerKPIs.interceptions}</Text>
+            <Text style={styles.kpiTitle}>Interceptions</Text>
+          </View>
+        </View>
+
+        {/* Team overview */}
+        {teamPerformance && (
+          <View style={styles.card}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.cardTitle}>Team Overview</Text>
+              <Text style={styles.cardSubtitle}>{playerData?.team?.team_name || "Your team"} — season stats</Text>
+            </View>
+            <View style={styles.teamOverviewRow}>
+              <View style={styles.teamOverviewItem}>
+                <Text style={styles.teamOverviewValue}>{teamPerformance.match_count ?? 0}</Text>
+                <Text style={styles.teamOverviewLabel}>Matches</Text>
+              </View>
+              <View style={styles.teamOverviewItem}>
+                <Text style={styles.teamOverviewValue}>
+                  {teamPerformance.record?.wins ?? 0}-{teamPerformance.record?.draws ?? 0}-{teamPerformance.record?.losses ?? 0}
+                </Text>
+                <Text style={styles.teamOverviewLabel}>W-D-L</Text>
+              </View>
+              <View style={styles.teamOverviewItem}>
+                <Text style={styles.teamOverviewValue}>{teamPerformance.goals?.scored ?? 0}</Text>
+                <Text style={styles.teamOverviewLabel}>Goals scored</Text>
+              </View>
+              <View style={styles.teamOverviewItem}>
+                <Text style={styles.teamOverviewValue}>{teamPerformance.goals?.conceded ?? 0}</Text>
+                <Text style={styles.teamOverviewLabel}>Goals conceded</Text>
+              </View>
+            </View>
+            {(teamPerformance.xg != null) && (
+              <View style={styles.teamOverviewXg}>
+                <Text style={styles.teamOverviewXgLabel}>Team xG</Text>
+                <Text style={styles.teamOverviewXgValue}>
+                  {(teamPerformance.xg?.for ?? 0).toFixed(2)} — against {(teamPerformance.xg?.against ?? 0).toFixed(2)}
+                </Text>
+              </View>
+            )}
+            <TouchableOpacity
+              style={styles.viewStatsButton}
+              onPress={() => router.push("/player/stats")}
+            >
+              <Text style={styles.viewStatsButtonText}>View full My Stats & team breakdown</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Rating Progression Chart */}
+        {ratingProgression.length > 0 && (
+          <View style={styles.card}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.cardTitle}>Rating Progression</Text>
+              <Text style={styles.cardSubtitle}>Performance rating over time</Text>
+            </View>
+            <LineChart
+              data={{
+                labels: ratingProgression.map((_, i) => {
+                  if (ratingProgression.length <= 5) return `GW${i + 1}`;
+                  if (i === 0 || i === ratingProgression.length - 1) return `GW${i + 1}`;
+                  if (i % Math.ceil(ratingProgression.length / 5) === 0) return `GW${i + 1}`;
+                  return "";
+                }),
+                datasets: [{
+                  data: ratingProgression.map(r => r.rating),
+                  color: (opacity = 1) => `rgba(15, 23, 42, ${opacity})`,
+                  strokeWidth: 3,
+                }],
+              }}
+              width={Math.min(screenW - 80, 800)}
+              height={280}
+              chartConfig={{
+                backgroundColor: "#ffffff",
+                backgroundGradientFrom: "#f8f9fa",
+                backgroundGradientTo: "#ffffff",
+                decimalPlaces: 1,
+                color: (opacity = 1) => `rgba(15, 23, 42, ${opacity})`,
+                labelColor: (opacity = 1) => `rgba(100, 116, 139, ${opacity})`,
+                propsForDots: {
+                  r: "6",
+                  strokeWidth: "3",
+                  stroke: "#ffffff",
+                  fill: "#0f172a",
+                },
+                propsForBackgroundLines: {
+                  stroke: "#e2e8f0",
+                  strokeWidth: 1,
+                  strokeDasharray: "0",
+                },
+                fillShadowGradient: "#0f172a",
+                fillShadowGradientOpacity: 0.1,
+              }}
+              bezier
+              withInnerLines={false}
+              withOuterLines={true}
+              withVerticalLines={false}
+              withHorizontalLines={true}
+              style={styles.premiumChart}
+            />
+          </View>
+        )}
+
+        {/* Zone Heatmap */}
+        {Object.keys(heatmapData).length > 0 && (
+          <View style={styles.card}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.cardTitle}>Action Heatmap</Text>
+              <Text style={styles.cardSubtitle}>Areas of highest activity on the pitch</Text>
+            </View>
+            <View style={styles.heatmapContainer}>
+              <PitchVisualization
+                width={Math.min(screenW - 100, 600)}
+                height={400}
+                heatMapData={heatmapData}
+              />
+            </View>
+            <View style={styles.zoneStatsContainer}>
+              {Object.entries(zoneAnalysis.zoneStats)
+                .sort((a, b) => b[1].total - a[1].total)
+                .slice(0, 3)
+                .map(([zone, stats]) => (
+                  <View key={zone} style={styles.zoneStatItem}>
+                    <Text style={styles.zoneStatLabel}>Zone {zone}</Text>
+                    <Text style={styles.zoneStatValue}>{stats.total} events</Text>
+                    <Text style={styles.zoneStatDetail}>
+                      {stats.attacking} attacking, {stats.defensive} defensive
                     </Text>
-                  )}
+                  </View>
+                ))}
+            </View>
+          </View>
+        )}
+
+        {/* ML Performance Analysis */}
+        {mlAnalysis && mlAnalysis.players && Array.isArray(mlAnalysis.players) && mlAnalysis.players.length > 0 && (
+          <View style={styles.card}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.cardTitle}>Performance Analysis & Insights</Text>
+              <Text style={styles.cardSubtitle}>AI-powered performance evaluation and recommendations</Text>
+            </View>
+            
+            {mlAnalysis.players.map((playerAnalysis, idx) => {
+              const metrics = playerAnalysis.performance_metrics || {};
+              const duelWinRate = metrics.duel_win_rate || 0;
+              const shotAccuracy = metrics.shot_accuracy || 0;
+              const defensiveActions = metrics.defensive_actions || 0;
+              const keyPasses = metrics.key_passes || 0;
+              const disciplineScore = metrics.discipline_score || 100;
+              
+              const insights = [];
+              
+              if (duelWinRate >= 60) {
+                insights.push({
+                  type: "positive",
+                  category: "Physical Performance",
+                  title: "Strong Duel Performance",
+                  message: `Duel win rate of ${duelWinRate.toFixed(1)}% demonstrates excellent positioning and timing in 1v1 situations. Continue focusing on body positioning and anticipation to maintain this level.`,
+                });
+              }
+              if (shotAccuracy >= 50 && shotAccuracy > 0) {
+                insights.push({
+                  type: "positive",
+                  category: "Attacking",
+                  title: "Effective Finishing",
+                  message: `Shot accuracy of ${shotAccuracy.toFixed(1)}% shows good composure in front of goal. Practice from various angles to maintain and improve this aspect of your game.`,
+                });
+              }
+              if (defensiveActions >= 8) {
+                insights.push({
+                  type: "positive",
+                  category: "Defensive Awareness",
+                  title: "High Defensive Involvement",
+                  message: `${defensiveActions} defensive actions indicate strong reading of the game and positioning. Continue maintaining high defensive awareness throughout matches.`,
+                });
+              }
+              if (keyPasses >= 3) {
+                insights.push({
+                  type: "positive",
+                  category: "Attacking",
+                  title: "Creative Playmaking",
+                  message: `${keyPasses} key passes demonstrate effective vision and decision-making in attack. Keep looking for opportunities to create goal-scoring chances for teammates.`,
+                });
+              }
+              if (disciplineScore >= 80) {
+                insights.push({
+                  type: "positive",
+                  category: "Discipline",
+                  title: "Good Discipline",
+                  message: `Discipline score of ${disciplineScore.toFixed(1)} reflects good timing and control in challenges. Continue focusing on clean challenges and proper positioning.`,
+                });
+              }
+              
+              if (playerAnalysis.recommendations && Array.isArray(playerAnalysis.recommendations)) {
+                playerAnalysis.recommendations.forEach(rec => {
+                  insights.push({
+                    type: "negative",
+                    category: rec.category,
+                    title: rec.title,
+                    message: rec.message,
+                    priority: rec.priority,
+                    actionItems: rec.action_items || [],
+                    expectedImprovement: rec.expected_improvement
+                  });
+                });
+              }
+              
+              return (
+                <View key={idx}>
+                  {insights.map((insight, insightIdx) => (
+                    <View key={insightIdx} style={styles.mlInsightCard}>
+                      <View style={styles.mlInsightHeader}>
+                        <Text style={styles.mlInsightCategory}>{insight.category}</Text>
+                        {insight.priority && (
+                          <Text style={styles.mlInsightPriority}>{insight.priority}</Text>
+                        )}
+                      </View>
+                      <Text style={styles.mlInsightTitle}>{insight.title}</Text>
+                      <Text style={styles.mlInsightMessage}>{insight.message}</Text>
+                      
+                      {insight.actionItems && insight.actionItems.length > 0 && (
+                        <View style={styles.mlInsightActions}>
+                          <Text style={styles.mlInsightActionsTitle}>Recommended Actions</Text>
+                          {insight.actionItems.map((action, actionIdx) => (
+                            <View key={actionIdx} style={styles.mlInsightActionItem}>
+                              <View style={styles.mlInsightActionBullet} />
+                              <Text style={styles.mlInsightActionText}>{action}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                      
+                      {insight.expectedImprovement && (
+                        <View style={styles.mlInsightExpected}>
+                          <Text style={styles.mlInsightExpectedText}>
+                            Expected: {insight.expectedImprovement}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  ))}
                 </View>
               );
             })}
           </View>
-        </View>
-
-        {/* ML Recommendations */}
-        {mlRecommendations && mlRecommendations.recommendations && (
-          <View style={[styles.card, { marginBottom: 16 }]}>
-            <Text style={styles.cardTitle}>Performance Recommendations</Text>
-            <View style={styles.metricsRow}>
-              <View style={styles.metric}>
-                <Text style={styles.metricLabel}>Overall Score</Text>
-                <Text style={styles.metricValue}>
-                  {mlRecommendations.performance_metrics?.overall_score || 0}
-                </Text>
-              </View>
-              <View style={styles.metric}>
-                <Text style={styles.metricLabel}>Duel Win Rate</Text>
-                <Text style={styles.metricValue}>
-                  {mlRecommendations.performance_metrics?.duel_win_rate || 0}%
-                </Text>
-              </View>
-            </View>
-
-            {mlRecommendations.recommendations.map((rec, idx) => (
-              <View key={idx} style={styles.recommendationItem}>
-                <View style={styles.recommendationHeader}>
-                  <Text style={styles.recommendationTitle}>{rec.title}</Text>
-                  <View style={[
-                    styles.priorityBadge,
-                    rec.priority === "High" && styles.priorityHigh
-                  ]}>
-                    <Text style={styles.priorityText}>{rec.priority}</Text>
-                  </View>
-                </View>
-                <Text style={styles.recommendationMessage}>{rec.message}</Text>
-                <Text style={styles.recommendationCategory}>{rec.category}</Text>
-                {rec.action_items && rec.action_items.length > 0 && (
-                  <View style={styles.actionItems}>
-                    {rec.action_items.map((item, i) => (
-                      <Text key={i} style={styles.actionItem}>• {item}</Text>
-                    ))}
-                  </View>
-                )}
-                {rec.expected_improvement && (
-                  <Text style={styles.expectedImprovement}>
-                    Expected: {rec.expected_improvement}
-                  </Text>
-                )}
-              </View>
-            ))}
-          </View>
         )}
 
-        {/* Join Team Section */}
-        {!playerData?.team && (
-          <View style={[styles.card, { marginBottom: 16 }]}>
-            <Text style={styles.cardTitle}>Join a Team</Text>
-            <Text style={styles.cardDescription}>
-              You're not currently on a team. Join a team to see your stats and performance.
-            </Text>
-            <TouchableOpacity
-              style={styles.joinTeamButton}
-              onPress={() => router.push("/player/join-team")}
-            >
-              <Text style={styles.joinTeamButtonText}>Join Team</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* If on team, show link to stats */}
-        {playerData?.team && (
-          <View style={[styles.card, { marginBottom: 16 }]}>
-            <Text style={styles.cardTitle}>View Your Stats</Text>
-            <Text style={styles.cardDescription}>
-              See your performance and team statistics
-            </Text>
-            <TouchableOpacity
-              style={styles.statsButton}
-              onPress={() => router.push("/player/stats")}
-            >
-              <Text style={styles.statsButtonText}>View Stats</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Team Overview */}
-        {teamPerformance && (
-          <View style={styles.teamOverviewCard}>
-            <Text style={styles.sectionTitle}>Team Overview</Text>
-            <View style={styles.overviewGrid}>
-              <View style={styles.overviewItem}>
-                <Text style={styles.overviewLabel}>Matches</Text>
-                <Text style={styles.overviewValue}>{teamPerformance.match_count || 0}</Text>
-              </View>
-              <View style={styles.overviewItem}>
-                <Text style={styles.overviewLabel}>Goals Scored</Text>
-                <Text style={styles.overviewValue}>{teamPerformance.goals?.scored || 0}</Text>
-              </View>
-              <View style={styles.overviewItem}>
-                <Text style={styles.overviewLabel}>Goals Conceded</Text>
-                <Text style={styles.overviewValue}>{teamPerformance.goals?.conceded || 0}</Text>
-              </View>
-              <View style={styles.overviewItem}>
-                <Text style={styles.overviewLabel}>Goal Difference</Text>
-                <Text style={[styles.overviewValue, (teamPerformance.goals?.difference || 0) >= 0 ? styles.positiveValue : styles.negativeValue]}>
-                  {teamPerformance.goals?.difference >= 0 ? '+' : ''}{teamPerformance.goals?.difference || 0}
-                </Text>
-              </View>
-              {teamPerformance.record && (
-                <>
-                  <View style={styles.overviewItem}>
-                    <Text style={styles.overviewLabel}>Wins</Text>
-                    <Text style={styles.overviewValue}>{teamPerformance.record.wins || 0}</Text>
-                  </View>
-                  <View style={styles.overviewItem}>
-                    <Text style={styles.overviewLabel}>Draws</Text>
-                    <Text style={styles.overviewValue}>{teamPerformance.record.draws || 0}</Text>
-                  </View>
-                  <View style={styles.overviewItem}>
-                    <Text style={styles.overviewLabel}>Losses</Text>
-                    <Text style={styles.overviewValue}>{teamPerformance.record.losses || 0}</Text>
-                  </View>
-                  <View style={styles.overviewItem}>
-                    <Text style={styles.overviewLabel}>Points</Text>
-                    <Text style={styles.overviewValue}>{teamPerformance.record.points || 0}</Text>
-                  </View>
-                </>
-              )}
-            </View>
-            {teamPerformance.most_used_formation && (
-              <Text style={styles.formationText}>Most Used Formation: {teamPerformance.most_used_formation}</Text>
-            )}
-          </View>
-        )}
-
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Logout</Text>
-        </TouchableOpacity>
-
-        <View style={{ height: 24 }} />
       </ScrollView>
-    </View>
+    </AppLayout>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f1f5f9",
+    backgroundColor: "#f8f9fa",
+  },
+  content: {
+    padding: 28,
+    paddingBottom: 40,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    padding: 40,
   },
   loadingText: {
-    fontSize: 16,
-    fontWeight: "700",
+    marginTop: 16,
+    fontSize: 15,
     color: "#64748b",
+    fontWeight: "500",
   },
-  content: {
-    padding: 16,
-  },
-  card: {
+  headerCard: {
     backgroundColor: "#ffffff",
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: "900",
-    color: "#0f172a",
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#0f172a",
-    marginBottom: 16,
-  },
-  cardDescription: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#64748b",
+    borderRadius: 12,
+    padding: 28,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   playerName: {
-    fontSize: 24,
-    fontWeight: "900",
+    fontSize: 32,
+    fontWeight: "800",
     color: "#0f172a",
+    letterSpacing: -0.5,
     marginBottom: 4,
   },
   teamName: {
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "600",
     color: "#64748b",
   },
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
+  ratingBadge: {
+    alignItems: "flex-end",
   },
-  statItem: {
-    width: "30%",
-    backgroundColor: "#f8fafc",
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    margin: 6,
-  },
-  statLabel: {
+  ratingLabel: {
     fontSize: 12,
     fontWeight: "700",
     color: "#64748b",
-    marginBottom: 4,
-    textTransform: "capitalize",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: 6,
   },
-  statValue: {
-    fontSize: 20,
-    fontWeight: "900",
+  ratingValue: {
+    fontSize: 42,
+    fontWeight: "800",
     color: "#0f172a",
+    letterSpacing: -1.5,
+    marginBottom: 8,
   },
-  statSubtext: {
+  ratingNote: {
+    maxWidth: 200,
+    marginTop: 4,
+  },
+  ratingNoteText: {
     fontSize: 10,
-    fontWeight: "600",
     color: "#94a3b8",
-    marginTop: 2,
+    fontWeight: "500",
+    lineHeight: 14,
+    textAlign: "right",
   },
-  metricsRow: {
+  kpiRow: {
     flexDirection: "row",
-    gap: 12,
+    gap: 16,
+    marginBottom: 16,
+    flexWrap: "wrap",
+  },
+  kpiCard: {
+    flex: 1,
+    minWidth: 140,
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 28,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  kpiValue: {
+    fontSize: 40,
+    fontWeight: "800",
+    color: "#0f172a",
+    marginBottom: 10,
+    letterSpacing: -1,
+  },
+  kpiTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#64748b",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  teamOverviewRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 16,
     marginBottom: 16,
   },
-  metric: {
+  teamOverviewItem: {
     flex: 1,
+    minWidth: 80,
     backgroundColor: "#f8fafc",
     borderRadius: 12,
     padding: 16,
     alignItems: "center",
-    margin: 6,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
   },
-  metricLabel: {
+  teamOverviewValue: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#0f172a",
+    marginBottom: 6,
+  },
+  teamOverviewLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#64748b",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  teamOverviewXg: {
+    paddingTop: 12,
+    marginTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+  },
+  teamOverviewXgLabel: {
     fontSize: 12,
     fontWeight: "700",
     color: "#64748b",
     marginBottom: 4,
   },
-  metricValue: {
-    fontSize: 24,
-    fontWeight: "900",
+  teamOverviewXgValue: {
+    fontSize: 14,
+    fontWeight: "600",
     color: "#0f172a",
   },
-  recommendationItem: {
+  viewStatsButton: {
+    marginTop: 16,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: "#0f172a",
+    alignItems: "center",
+  },
+  viewStatsButtonText: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  card: {
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 28,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  sectionHeader: {
+    marginBottom: 24,
+  },
+  cardTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#0f172a",
+    marginBottom: 6,
+    letterSpacing: -0.3,
+  },
+  cardSubtitle: {
+    fontSize: 14,
+    color: "#64748b",
+    fontWeight: "500",
+  },
+  premiumChart: {
+    marginTop: 12,
+    borderRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  chartWrapper: {
+    marginTop: 8,
+    alignItems: "center",
+  },
+  heatmapContainer: {
+    alignItems: "center",
+    marginTop: 16,
+    marginBottom: 20,
+  },
+  zoneStatsContainer: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 16,
+  },
+  zoneStatItem: {
+    flex: 1,
+    backgroundColor: "#f8fafc",
+    borderRadius: 10,
     padding: 16,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  zoneStatLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#64748b",
+    marginBottom: 6,
+  },
+  zoneStatValue: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#0f172a",
+    marginBottom: 4,
+  },
+  zoneStatDetail: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#94a3b8",
+  },
+  mlInsightCard: {
     backgroundColor: "#f8fafc",
     borderRadius: 12,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: "#3b82f6",
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
   },
-  recommendationHeader: {
+  mlInsightHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  recommendationTitle: {
-    fontSize: 16,
-    fontWeight: "900",
+  mlInsightCategory: {
+    fontSize: 12,
+    fontWeight: "700",
     color: "#0f172a",
-    flex: 1,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
-  priorityBadge: {
+  mlInsightPriority: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748b",
     backgroundColor: "#e2e8f0",
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: 6,
   },
-  priorityHigh: {
-    backgroundColor: "#fee2e2",
-  },
-  priorityText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#64748b",
-  },
-  recommendationMessage: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#475569",
+  mlInsightTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#0f172a",
     marginBottom: 8,
+  },
+  mlInsightMessage: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#475569",
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  mlInsightActions: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+  },
+  mlInsightActionsTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0f172a",
+    marginBottom: 8,
+  },
+  mlInsightActionItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 8,
+  },
+  mlInsightActionBullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#0f172a",
+    marginTop: 6,
+    marginRight: 10,
+  },
+  mlInsightActionText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#475569",
     lineHeight: 20,
   },
-  recommendationCategory: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#3b82f6",
-    marginBottom: 8,
+  mlInsightExpected: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
   },
-  actionItems: {
-    marginTop: 8,
-  },
-  actionItem: {
+  mlInsightExpectedText: {
     fontSize: 13,
-    fontWeight: "600",
-    color: "#475569",
-    marginBottom: 4,
-    lineHeight: 18,
-  },
-  expectedImprovement: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#10b981",
-    marginTop: 8,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 32,
-  },
-  errorText: {
-    fontSize: 16,
     fontWeight: "700",
-    color: "#ef4444",
-    marginBottom: 16,
-  },
-  button: {
-    backgroundColor: "#0f172a",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  buttonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  logoutButton: {
-    backgroundColor: "#ef4444",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  logoutButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "800",
+    color: "#10b981",
   },
   joinTeamButton: {
     backgroundColor: "#0f172a",
@@ -552,73 +963,5 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 16,
     fontWeight: "800",
-  },
-  statsButton: {
-    backgroundColor: "#3b82f6",
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 16,
-  },
-  statsButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  teamOverviewCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-    marginBottom: 16,
-  },
-  overviewGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginHorizontal: -6,
-  },
-  overviewItem: {
-    width: "30%",
-    backgroundColor: "#f8fafc",
-    borderRadius: 10,
-    padding: 14,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    margin: 6,
-  },
-  overviewLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#64748b",
-    marginBottom: 6,
-    textAlign: "center",
-  },
-  overviewValue: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#0f172a",
-  },
-  positiveValue: {
-    color: "#10b981",
-  },
-  negativeValue: {
-    color: "#ef4444",
-  },
-  formationText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#64748b",
-    marginTop: 16,
-    textAlign: "center",
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
   },
 });

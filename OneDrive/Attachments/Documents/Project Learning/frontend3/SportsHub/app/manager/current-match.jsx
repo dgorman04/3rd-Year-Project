@@ -3,7 +3,6 @@ import React, { useEffect, useState, useRef, useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Dimensions, Platform } from "react-native";
 import { router } from "expo-router";
 import { Picker } from "@react-native-picker/picker";
-import AppHeader from "../../components/AppHeader";
 import AppLayout from "../../components/AppLayout";
 import PitchVisualization from "../../components/PitchVisualization";
 import { API, WS_URL, ngrokHeaders } from "../../lib/config";
@@ -749,19 +748,16 @@ export default function CurrentMatch() {
     }
 
     // Fallback: basic insight based on xG if no specific attacking/defensive breakdown yet
-    if (!insights.length && liveMatch && (liveMatch.xg !== undefined || liveMatch.xg_against !== undefined)) {
+    if (!insights.length && liveMatch && liveMatch.xg !== undefined) {
       const xgFor = parseFloat(liveMatch.xg || 0);
-      const xgAgainst = parseFloat(liveMatch.xg_against || 0);
-      const diff = xgFor - xgAgainst;
-
       insights.push({
         type: "overall",
-        priority: Math.abs(diff) >= 0.5 ? "high" : "medium",
-        title: "Overall Match Control",
+        priority: xgFor >= 1 ? "high" : "medium",
+        title: "Chance Quality",
         message:
-          diff >= 0
-            ? "You are generating the better chances so far. Keep the intensity and avoid cheap turnovers that could swing momentum."
-            : "Opponents are creating the better chances. Slow the game down, protect central areas and look for higher‑quality transitions.",
+          xgFor >= 1
+            ? `Current xG: ${xgFor.toFixed(2)}. You are creating good chances. Keep the intensity and avoid cheap turnovers.`
+            : `Current xG: ${xgFor.toFixed(2)}. Focus on higher-quality chances and better shot selection.`,
       });
     }
 
@@ -1124,7 +1120,6 @@ export default function CurrentMatch() {
     return (
       <AppLayout>
         <View style={styles.container}>
-          {Platform.OS !== "web" && <AppHeader subtitle="Live Match" />}
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#4a90e2" />
             <Text style={styles.loadingText}>Loading...</Text>
@@ -1141,7 +1136,6 @@ export default function CurrentMatch() {
     return (
       <AppLayout>
         <View style={styles.container}>
-          {Platform.OS !== "web" && <AppHeader subtitle="Live Match" />}
           {Platform.OS === "web" && (
             <View style={styles.webHeader}>
               <View>
@@ -1170,8 +1164,6 @@ export default function CurrentMatch() {
   return (
     <AppLayout>
       <View style={styles.container}>
-        {Platform.OS !== "web" && <AppHeader subtitle="Live Match" />}
-
         {Platform.OS === "web" && (
           <View style={styles.webHeader}>
             <View>
@@ -1210,7 +1202,7 @@ export default function CurrentMatch() {
           </View>
 
           {/* Live xG */}
-          {(liveMatch?.xg !== undefined || liveMatch?.xg_against !== undefined) && (
+          {liveMatch?.xg !== undefined && (
             <View style={styles.card}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.cardTitle}>Live Expected Goals (xG)</Text>
@@ -1222,25 +1214,6 @@ export default function CurrentMatch() {
                   <Text style={styles.xgValue}>{parseFloat(liveMatch.xg || 0).toFixed(2)}</Text>
                   <Text style={styles.xgSubtext}>{liveMatch.goals_scored || 0} goals scored</Text>
                 </View>
-                <View style={styles.xgDivider} />
-                <View style={styles.xgItem}>
-                  <Text style={styles.xgLabel}>xG Against</Text>
-                  <Text style={styles.xgValue}>{parseFloat(liveMatch.xg_against || 0).toFixed(2)}</Text>
-                  <Text style={styles.xgSubtext}>{liveMatch.goals_conceded || 0} goals conceded</Text>
-                </View>
-              </View>
-              <View style={styles.xgDifference}>
-                <Text style={styles.xgDifferenceLabel}>xG Difference</Text>
-                <Text
-                  style={[
-                    styles.xgDifferenceValue,
-                    (parseFloat(liveMatch.xg || 0) - parseFloat(liveMatch.xg_against || 0)) >= 0
-                      ? styles.xgPositive
-                      : styles.xgNegative,
-                  ]}
-                >
-                  {(parseFloat(liveMatch.xg || 0) - parseFloat(liveMatch.xg_against || 0)).toFixed(2)}
-                </Text>
               </View>
             </View>
           )}

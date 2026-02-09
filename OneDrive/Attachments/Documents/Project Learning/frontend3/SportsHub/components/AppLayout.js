@@ -35,7 +35,8 @@ export default function AppLayout({ children, showSidebar = true }) {
   useEffect(() => {
     (async () => {
       const token = await getToken();
-      if (token) {
+      
+            if (token) {
         try {
           const res = await fetch(`${API}/auth/me/`, {
             headers: { Authorization: `Bearer ${token}`, ...ngrokHeaders() },
@@ -238,6 +239,8 @@ const styles = StyleSheet.create({
         marginLeft: 0,
         height: "100%",
         width: "100%",
+        // Start content below hamburger on phone (hamburger top: 50, height: 44, + gap)
+        paddingTop: 104,
       },
     }),
   },

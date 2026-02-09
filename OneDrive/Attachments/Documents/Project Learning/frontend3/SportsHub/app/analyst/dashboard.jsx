@@ -2,15 +2,12 @@
 import React from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from "react-native";
 import { router } from "expo-router";
-import AppHeader from "../../components/AppHeader";
 import AppLayout from "../../components/AppLayout";
 
 export default function AnalystDashboard() {
   return (
     <AppLayout>
       <View style={styles.screen}>
-        {Platform.OS !== "web" && <AppHeader subtitle="Analyst Dashboard" />}
-        
         {Platform.OS === "web" && (
           <View style={styles.webHeader}>
             <View>
@@ -35,9 +32,6 @@ export default function AnalystDashboard() {
               style={styles.actionCard}
               onPress={() => router.push("/analyst/record-events")}
             >
-              <View style={styles.cardIconContainer}>
-                <Text style={styles.cardIcon}>⚽</Text>
-              </View>
               <Text style={styles.cardTitle}>Start New Match</Text>
               <Text style={styles.cardDescription}>
                 Begin recording events for a new match. Set up opponent, formation, and season details.
@@ -51,9 +45,6 @@ export default function AnalystDashboard() {
               style={styles.actionCard}
               onPress={() => router.push("/analyst/review-matches")}
             >
-              <View style={styles.cardIconContainer}>
-                <Text style={styles.cardIcon}>📊</Text>
-              </View>
               <Text style={styles.cardTitle}>Review Matches</Text>
               <Text style={styles.cardDescription}>
                 View and analyze previous matches. Review statistics, formations, and performance data.
@@ -69,22 +60,18 @@ export default function AnalystDashboard() {
             <Text style={styles.sectionTitle}>Analyst Features</Text>
             <View style={styles.quickStatsGrid}>
               <View style={styles.quickStatCard}>
-                <Text style={styles.quickStatValue}>⚡</Text>
                 <Text style={styles.quickStatLabel}>Live Recording</Text>
                 <Text style={styles.quickStatDesc}>Record events in real-time during matches with precise timestamps and zone tracking</Text>
               </View>
               <View style={styles.quickStatCard}>
-                <Text style={styles.quickStatValue}>🎯</Text>
                 <Text style={styles.quickStatLabel}>Zone Analysis</Text>
                 <Text style={styles.quickStatDesc}>Map events to specific pitch zones for tactical analysis and heat map visualization</Text>
               </View>
               <View style={styles.quickStatCard}>
-                <Text style={styles.quickStatValue}>📈</Text>
                 <Text style={styles.quickStatLabel}>Performance Insights</Text>
                 <Text style={styles.quickStatDesc}>Receive AI-powered tactical suggestions based on live match data and patterns</Text>
               </View>
               <View style={styles.quickStatCard}>
-                <Text style={styles.quickStatValue}>👥</Text>
                 <Text style={styles.quickStatLabel}>Player Tracking</Text>
                 <Text style={styles.quickStatDesc}>Track individual player statistics including shots, passes, tackles, and more</Text>
               </View>
@@ -176,18 +163,6 @@ const styles = StyleSheet.create({
     position: "relative",
     overflow: "hidden",
   },
-  cardIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: "#eff6ff",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  cardIcon: {
-    fontSize: 32,
-  },
   cardTitle: {
     fontSize: 20,
     fontWeight: "700",
@@ -247,10 +222,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 1,
-  },
-  quickStatValue: {
-    fontSize: 32,
-    marginBottom: 8,
   },
   quickStatLabel: {
     fontSize: 14,

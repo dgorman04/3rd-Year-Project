@@ -1,4 +1,4 @@
-// app/manager/match/[id].jsx
+// app/analyst/match-review/[id].jsx – same as manager match detail for analyst review
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Platform, ActivityIndicator } from "react-native";
 import { Picker } from "@react-native-picker/picker";
@@ -159,7 +159,7 @@ function DuelsByThirdChart({ duelsByThird, screenW }) {
   );
 }
 
-export default function ManagerMatchDetail() {
+export default function AnalystMatchReview() {
   const { id } = useLocalSearchParams();
   const matchId = String(id || "");
 
@@ -172,8 +172,8 @@ export default function ManagerMatchDetail() {
   const [selectedTimestamp, setSelectedTimestamp] = useState(null);
   const videoPlayerRef = useRef(null);
   const [selectedPlayerFilter, setSelectedPlayerFilter] = useState(null);
-  const [timelinePlayerFilter, setTimelinePlayerFilter] = useState(null); // Event timeline: null = All players
-  const [timelineEventTypeFilter, setTimelineEventTypeFilter] = useState(null); // Event timeline: null = All events
+  const [timelinePlayerFilter, setTimelinePlayerFilter] = useState(null);
+  const [timelineEventTypeFilter, setTimelineEventTypeFilter] = useState(null);
   const [matchPerformanceSuggestions, setMatchPerformanceSuggestions] = useState(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [heatmapFilter, setHeatmapFilter] = useState("attacking"); // "attacking" | "defensive"
@@ -759,7 +759,6 @@ export default function ManagerMatchDetail() {
     return insights;
   }, [liveHeatmapData, heatmapFilter]);
 
-  // Event timeline filters: unique players and event types from eventInstances
   const timelinePlayers = useMemo(() => {
     const names = [...new Set(eventInstances.map((e) => e.player).filter(Boolean))];
     return names.sort((a, b) => String(a).localeCompare(String(b)));
@@ -863,7 +862,7 @@ export default function ManagerMatchDetail() {
               </View>
             </View>
 
-            {/* xG For */}
+            {/* xG Difference (like live match) */}
             {(match?.xg !== undefined || teamKPIs.xg) && (
               <View style={styles.card}>
                 <View style={styles.sectionHeader}>

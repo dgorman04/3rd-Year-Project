@@ -51,6 +51,18 @@ export default function Login() {
       
       clearTimeout(timeoutId);
 
+      // 404 on phone usually means wrong API URL (localhost doesn't work on device)
+      if (res.status === 404) {
+        setError(
+          "Server not found (404). On a phone you cannot use localhost.\n\n" +
+          "1. In SportsHub folder, edit .env and set EXPO_PUBLIC_API_BASE to either:\n" +
+          "   • Your computer's IP, e.g. http://192.168.1.x:8000 (phone and PC on same Wi‑Fi), or\n" +
+          "   • Your current ngrok URL (e.g. https://xxxx.ngrok-free.app) if using ngrok.\n" +
+          "2. Restart the app (stop Expo and run npx expo start again)."
+        );
+        return;
+      }
+
       const rawResponse = await res.text();
       let tokens = {};
       
@@ -113,7 +125,11 @@ export default function Login() {
       if (err.name === "AbortError" || err.message?.includes("aborted")) {
         setError("Request timed out. Please check:\n1. Your internet connection\n2. The server is accessible\n3. Try again");
       } else if (err.message?.includes("Failed to fetch") || err.message?.includes("Network request failed") || err.message?.includes("NetworkError")) {
-        setError(`Cannot connect to server.\n\nPlease check:\n1. Backend server is running\n2. API URL: ${API}\n3. Your phone has internet access\n4. ngrok tunnel is active (if using ngrok)`);
+        setError(
+          "Cannot connect to server.\n\n" +
+          "App is using: " + API + "\n\n" +
+          "On a phone, localhost does not work. In .env set EXPO_PUBLIC_API_BASE to your computer's IP (e.g. http://192.168.1.x:8000) or your ngrok URL, then restart the app."
+        );
       } else if (err.message?.includes("timeout")) {
         setError("Request timed out. Please check your connection and try again.");
       } else {

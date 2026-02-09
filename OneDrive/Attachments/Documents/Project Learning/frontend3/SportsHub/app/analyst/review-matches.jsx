@@ -3,7 +3,6 @@ import React, { useEffect, useState, useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { router } from "expo-router";
-import AppHeader from "../../components/AppHeader";
 import AppLayout from "../../components/AppLayout";
 import { API, ngrokHeaders } from "../../lib/config";
 import { getToken, clearToken } from "../../lib/auth";
@@ -77,18 +76,17 @@ export default function ReviewMatches() {
   }, [selectedSeason, token]);
 
   const getMatchResult = (match) => {
-    if (match.goals_scored > match.goals_conceded) return { text: "W", color: "#10b981", bg: "#d1fae5" };
-    if (match.goals_scored === match.goals_conceded) return { text: "D", color: "#f59e0b", bg: "#fef3c7" };
-    return { text: "L", color: "#ef4444", bg: "#fee2e2" };
+    if (match.goals_scored > match.goals_conceded) return { text: "W", color: "#0f172a", bg: "#e2e8f0" };
+    if (match.goals_scored === match.goals_conceded) return { text: "D", color: "#475569", bg: "#f1f5f9" };
+    return { text: "L", color: "#64748b", bg: "#f8fafc" };
   };
 
   if (loading && matches.length === 0) {
     return (
       <AppLayout>
         <View style={styles.container}>
-          {Platform.OS !== "web" && <AppHeader subtitle="Review Matches" />}
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#2563eb" />
+            <ActivityIndicator size="large" color="#0f172a" />
             <Text style={styles.loadingText}>Loading matches...</Text>
           </View>
         </View>
@@ -99,8 +97,6 @@ export default function ReviewMatches() {
   return (
     <AppLayout>
       <View style={styles.container}>
-        {Platform.OS !== "web" && <AppHeader subtitle="Review Matches" />}
-        
         {Platform.OS === "web" && (
           <View style={styles.webHeader}>
             <View>
@@ -133,16 +129,17 @@ export default function ReviewMatches() {
 
           {matches.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyIcon}>📊</Text>
+              <View style={styles.emptyIconLine} />
               <Text style={styles.emptyTitle}>No matches found</Text>
               <Text style={styles.emptyText}>
-                {selectedSeason !== "all" 
+                {selectedSeason !== "all"
                   ? `No matches found for season ${selectedSeason}.`
                   : "Start recording events to see matches here."}
               </Text>
               <TouchableOpacity
                 style={styles.emptyButton}
                 onPress={() => router.push("/analyst/record-events")}
+                activeOpacity={0.85}
               >
                 <Text style={styles.emptyButtonText}>Start New Match</Text>
               </TouchableOpacity>
@@ -198,7 +195,7 @@ export default function ReviewMatches() {
                       <View style={styles.detailItem}>
                         <Text style={styles.detailLabel}>Venue</Text>
                         <Text style={styles.detailValue}>
-                          {match.is_home ? "🏠 Home" : "✈️ Away"}
+                          {match.is_home ? "Home" : "Away"}
                         </Text>
                       </View>
                       <View style={styles.detailItem}>
@@ -211,7 +208,8 @@ export default function ReviewMatches() {
 
                     <TouchableOpacity
                       style={styles.viewButton}
-                      onPress={() => router.push(`/analyst/match/${match.id}`)}
+                      onPress={() => router.push(`/analyst/match-review/${match.id}`)}
+                      activeOpacity={0.85}
                     >
                       <Text style={styles.viewButtonText}>View Details</Text>
                     </TouchableOpacity>
@@ -230,140 +228,144 @@ export default function ReviewMatches() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#f8fafc",
   },
   webHeader: {
-    padding: 24,
-    paddingTop: Platform.OS === "web" ? 24 : 60,
+    padding: 28,
+    paddingTop: Platform.OS === "web" ? 28 : 60,
     backgroundColor: "#ffffff",
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    borderBottomColor: "#e2e8f0",
   },
   webTitle: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: "700",
-    color: "#111827",
-    marginBottom: 4,
+    color: "#0f172a",
+    marginBottom: 6,
+    letterSpacing: -0.5,
   },
   webSubtitle: {
     fontSize: 14,
-    fontWeight: "400",
-    color: "#6b7280",
+    fontWeight: "500",
+    color: "#64748b",
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    gap: 16,
+    gap: 20,
   },
   loadingText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#6b7280",
+    fontSize: 15,
+    fontWeight: "500",
+    color: "#64748b",
   },
   content: {
     padding: 24,
-    gap: 20,
+    paddingBottom: 40,
+    gap: 24,
   },
   filterCard: {
     backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 14,
+    padding: 20,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#e2e8f0",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   filterLabel: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "600",
-    color: "#111827",
+    color: "#64748b",
     marginBottom: 12,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   pickerContainer: {
     borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 8,
-    backgroundColor: "#ffffff",
+    borderColor: "#e2e8f0",
+    borderRadius: 10,
+    backgroundColor: "#f8fafc",
     overflow: "hidden",
   },
   picker: {
-    backgroundColor: "#fff",
-    color: "#111827",
-    fontWeight: "400",
+    backgroundColor: "transparent",
+    color: "#0f172a",
+    fontWeight: "500",
   },
   pickerItem: {
-    backgroundColor: "#fff",
-    color: "#111827",
+    color: "#0f172a",
   },
   emptyCard: {
     backgroundColor: "#ffffff",
     borderRadius: 16,
-    padding: 48,
+    padding: 56,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#e2e8f0",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
     elevation: 2,
   },
-  emptyIcon: {
-    fontSize: 64,
-    marginBottom: 16,
+  emptyIconLine: {
+    width: 48,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: "#e2e8f0",
+    marginBottom: 24,
   },
   emptyTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "700",
-    color: "#111827",
-    marginBottom: 8,
+    color: "#0f172a",
+    marginBottom: 10,
+    letterSpacing: -0.3,
   },
   emptyText: {
-    fontSize: 15,
-    fontWeight: "400",
-    color: "#6b7280",
-    marginBottom: 24,
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#64748b",
+    marginBottom: 28,
     textAlign: "center",
+    lineHeight: 22,
   },
   emptyButton: {
-    backgroundColor: "#2563eb",
-    paddingHorizontal: 24,
+    backgroundColor: "#0f172a",
+    paddingHorizontal: 28,
     paddingVertical: 14,
-    borderRadius: 8,
-    shadowColor: "#2563eb",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    borderRadius: 10,
   },
   emptyButtonText: {
     color: "#ffffff",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
+    letterSpacing: 0.3,
   },
   matchesGrid: {
-    gap: 16,
+    gap: 20,
     ...Platform.select({
       web: {
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))",
-        gap: "16px",
+        gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
+        gap: "20px",
       },
     }),
   },
   matchCard: {
     backgroundColor: "#ffffff",
     borderRadius: 16,
-    padding: 20,
+    padding: 24,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#e2e8f0",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
   },
@@ -371,7 +373,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 16,
+    marginBottom: 20,
   },
   matchHeaderLeft: {
     flex: 1,
@@ -379,104 +381,108 @@ const styles = StyleSheet.create({
   matchOpponent: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#111827",
-    marginBottom: 4,
+    color: "#0f172a",
+    marginBottom: 6,
+    letterSpacing: -0.3,
   },
   matchDate: {
-    fontSize: 14,
-    fontWeight: "400",
-    color: "#6b7280",
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#64748b",
     marginBottom: 4,
   },
   matchSeason: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "500",
-    color: "#9ca3af",
+    color: "#94a3b8",
     marginTop: 4,
   },
   resultBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
   },
   resultText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
+    letterSpacing: 0.5,
   },
   matchScore: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 16,
-    marginBottom: 16,
-    backgroundColor: "#f9fafb",
+    paddingVertical: 20,
+    marginBottom: 20,
+    backgroundColor: "#f8fafc",
     borderRadius: 12,
-    gap: 16,
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
+    gap: 20,
   },
   scoreItem: {
     flex: 1,
     alignItems: "center",
   },
   scoreLabel: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#6b7280",
-    marginBottom: 4,
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#64748b",
+    marginBottom: 6,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   scoreValue: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#111827",
+    fontSize: 32,
+    fontWeight: "800",
+    color: "#0f172a",
+    letterSpacing: -0.5,
   },
   scoreDivider: {
-    fontSize: 24,
-    fontWeight: "600",
-    color: "#9ca3af",
+    fontSize: 20,
+    fontWeight: "500",
+    color: "#94a3b8",
   },
   matchDetails: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
-    marginBottom: 16,
-    paddingBottom: 16,
+    gap: 16,
+    marginBottom: 20,
+    paddingBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    borderBottomColor: "#f1f5f9",
   },
   detailItem: {
     flex: 1,
-    minWidth: 100,
+    minWidth: 90,
   },
   detailLabel: {
     fontSize: 11,
-    fontWeight: "500",
-    color: "#6b7280",
+    fontWeight: "600",
+    color: "#64748b",
     marginBottom: 4,
     textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   detailValue: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#111827",
+    color: "#0f172a",
   },
   statusText: {
     textTransform: "capitalize",
   },
   viewButton: {
-    backgroundColor: "#2563eb",
-    paddingVertical: 12,
-    borderRadius: 8,
+    backgroundColor: "#0f172a",
+    paddingVertical: 14,
+    borderRadius: 10,
     alignItems: "center",
-    shadowColor: "#2563eb",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
   },
   viewButtonText: {
     color: "#ffffff",
     fontSize: 14,
     fontWeight: "600",
+    letterSpacing: 0.3,
   },
 });

@@ -43,3 +43,9 @@ node_modules/
 dist/
 build/
 
+## Project secrets and local DB
+.env
+*.env
+!*.env.example
+backend/db.sqlite3
+

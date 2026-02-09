@@ -20,12 +20,14 @@ export default function RootLayout() {
       <Stack.Screen name="manager/overall-stats" />
       <Stack.Screen name="manager/players" />
       <Stack.Screen name="manager/player/[id]" />
+      <Stack.Screen name="manager/messages" />
 
       {/* Analyst Routes */}
       <Stack.Screen name="analyst/dashboard" />
       <Stack.Screen name="analyst/match/[id]" />
       <Stack.Screen name="analyst/record-events" />
       <Stack.Screen name="analyst/review-matches" />
+      <Stack.Screen name="analyst/messages" />
 
       {/* Player Routes */}
       <Stack.Screen name="player/signup" />

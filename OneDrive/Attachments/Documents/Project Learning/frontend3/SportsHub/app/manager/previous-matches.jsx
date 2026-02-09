@@ -1,6 +1,6 @@
 // app/manager/previous-matches.jsx - View previous match statistics
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from "react-native";
 import { router } from "expo-router";
 import AppHeader from "../../components/AppHeader";
 import { API, ngrokHeaders } from "../../lib/config";
@@ -62,7 +62,7 @@ export default function PreviousMatches() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <AppHeader subtitle="Previous Matches" />
+        {Platform.OS === "web" && <AppHeader subtitle="Previous Matches" />}
         <View style={styles.loadingContainer}>
           <Text>Loading...</Text>
         </View>
@@ -72,7 +72,7 @@ export default function PreviousMatches() {
 
   return (
     <View style={styles.container}>
-      <AppHeader subtitle="Previous Matches" />
+      {Platform.OS === "web" && <AppHeader subtitle="Previous Matches" />}
       <ScrollView contentContainerStyle={styles.content}>
         {matches.length === 0 ? (
           <View style={styles.empty}>

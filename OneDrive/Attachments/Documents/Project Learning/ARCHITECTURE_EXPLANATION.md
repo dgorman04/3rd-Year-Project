@@ -16,13 +16,60 @@ This is a **football/soccer team analytics platform** with three main components
 
 ```
 Mobile App (React Native)
-    ↓ HTTP/REST API
+    ↓ HTTP/REST API (Django port 8000)
 Django Backend (Python)
-    ↓ Publishes to Redis
-Node.js WebSocket Server
-    ↓ Broadcasts via WebSocket
-Mobile App (Real-time updates)
+    ↓ Publishes to Redis (channel "events" / "chat")
+Redis (localhost:6379)
+    ↑ Subscribes
+Node.js WebSocket Server (port 3001)
+    ↓ Broadcasts via WebSocket to all connected clients
+Mobile App (Real-time updates: live stats, chat)
 ```
+
+**Important:** The API and WebSockets use **different ports**. Django runs on **8000**, the Node WebSocket server runs on **3001**. When using ngrok from a phone, you need **two tunnels**: one for 8000 (API) and one for 3001 (WebSockets).
+
+### **Why WebSockets Show "Offline"**
+
+The app shows "Offline" when the WebSocket connection fails. Common causes:
+
+1. **Single ngrok URL for both API and WebSocket**  
+   If you set `EXPO_PUBLIC_WS_URL` to the same ngrok URL as the API (e.g. `wss://xxxx.ngrok-free.dev`), that URL is tunnelled to **port 8000** (Django). The WebSocket server runs on **port 3001**. So the client is trying to open a WebSocket to Django, not to the Node server → connection fails → "Offline".
+
+2. **Node WebSocket server not running**  
+   The Node server (`backend/server.js`) must be running on port 3001. Start it with:  
+   `cd backend && node server.js`
+
+3. **Redis not running**  
+   Django publishes events to Redis; the Node server subscribes to Redis. If Redis is not running (e.g. `redis-server` or Redis on localhost:6379), the Node server may not start or Django cannot publish. Install Redis and start it (e.g. `redis-server`).
+
+4. **Wrong WebSocket URL on phone**  
+   On a phone you must use a **second** ngrok tunnel for port 3001 and set `EXPO_PUBLIC_WS_URL=wss://your-second-ngrok-url` in the frontend `.env`.
+
+### **How to Get WebSockets Online**
+
+1. **Start Redis** (if not already running):  
+   - Windows: install Redis (e.g. MSI or WSL) and run `redis-server`  
+   - Mac/Linux: `redis-server`
+
+2. **Start the Node WebSocket server** (in a separate terminal):  
+   ```bash
+   cd backend
+   node server.js
+   ```  
+   You should see: `WebSocket running on ws://0.0.0.0:3001` and `Subscribed to Redis channels: events, chat`.
+
+3. **Use two ngrok tunnels when testing on phone:**  
+   - Terminal 1: `ngrok http 8000` → use the `https://` URL for `EXPO_PUBLIC_API_BASE`  
+   - Terminal 2: `ngrok http 3001` → use the `https://` URL as **wss://** for `EXPO_PUBLIC_WS_URL`  
+   Example:  
+   - API: `EXPO_PUBLIC_API_BASE=https://abc123.ngrok-free.app`  
+   - WS: `EXPO_PUBLIC_WS_URL=wss://def456.ngrok-free.app`
+
+4. **Restart Expo** after changing `.env` so the app picks up the new `EXPO_PUBLIC_WS_URL`.
+
+**Same WiFi (no ngrok):** If the phone and computer are on the same network, you can use your computer’s IP:  
+- `EXPO_PUBLIC_API_BASE=http://192.168.x.x:8000`  
+- `EXPO_PUBLIC_WS_URL=ws://192.168.x.x:3001`
 
 ### **Why This Architecture?**
 

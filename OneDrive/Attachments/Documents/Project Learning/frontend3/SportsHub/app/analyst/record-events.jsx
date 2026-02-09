@@ -3,7 +3,6 @@ import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Platform } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { router } from "expo-router";
-import AppHeader from "../../components/AppHeader";
 import AppLayout from "../../components/AppLayout";
 import { API, ngrokHeaders } from "../../lib/config";
 import { getToken, clearToken } from "../../lib/auth";
@@ -134,7 +133,6 @@ export default function RecordEvents() {
     return (
       <AppLayout>
         <View style={styles.container}>
-          {Platform.OS !== "web" && <AppHeader subtitle="Start New Match" />}
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#2563eb" />
             <Text style={styles.loadingText}>Loading...</Text>
@@ -147,8 +145,6 @@ export default function RecordEvents() {
   return (
     <AppLayout>
       <View style={styles.container}>
-        {Platform.OS !== "web" && <AppHeader subtitle="Start New Match" />}
-        
         {Platform.OS === "web" && (
           <View style={styles.webHeader}>
             <View>
@@ -477,8 +473,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#1f2937",
-    backgroundColor: "#111827",
+    borderColor: "#334155",
+    backgroundColor: "#f9fafb",
   },
   formSection: {
     marginBottom: 20,
@@ -494,8 +490,8 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: "#1f2937",
-    backgroundColor: "#020617",
+    borderColor: "#d1d5db",
+    backgroundColor: "#ffffff",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 8,
@@ -505,12 +501,12 @@ const styles = StyleSheet.create({
   },
   pickerContainer: {
     borderRadius: 8,
-    backgroundColor: "transparent",
+    backgroundColor: "#f9fafb",
     overflow: "hidden",
   },
   picker: {
     backgroundColor: "transparent",
-    color: "#f9fafb",
+    color: "#0f172a",
     fontWeight: "400",
   },
   pickerItem: {
@@ -522,7 +518,7 @@ const styles = StyleSheet.create({
     right: 10,
     top: 10,
     fontSize: 14,
-    color: "#9ca3af",
+    color: "#475569",
     pointerEvents: "none",
   },
   hintText: {
