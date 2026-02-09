@@ -80,43 +80,6 @@ export default function PlayerJoinTeam() {
     }
   };
 
-  const handleLeaveTeam = async () => {
-    if (!currentTeam) return;
-    
-    const confirm = await new Promise((resolve) => {
-      // In a real app, use a proper confirmation dialog
-      alert("Are you sure you want to leave this team?");
-      resolve(true);
-    });
-
-    setBusy(true);
-    try {
-      const res = await fetch(`${API}/players/leave-team/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          ...ngrokHeaders(),
-        },
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        alert(data?.detail || "Failed to leave team.");
-        return;
-      }
-
-      alert("Successfully left team.");
-      setCurrentTeam(null);
-      router.replace("/player/dashboard");
-    } catch (err) {
-      console.log(err);
-      alert("Network error.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   if (loading) {
     return (
       <View style={styles.container}>
@@ -133,24 +96,8 @@ export default function PlayerJoinTeam() {
     <View style={styles.container}>
       {Platform.OS === "web" && <AppHeader subtitle="Join Team" />}
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Current Team */}
-        {currentTeam && (
-          <View style={styles.currentTeamCard}>
-            <Text style={styles.currentTeamTitle}>Current Team</Text>
-            <Text style={styles.currentTeamName}>{currentTeam.team_name}</Text>
-            <Text style={styles.currentTeamClub}>{currentTeam.club_name}</Text>
-            <TouchableOpacity
-              style={styles.leaveButton}
-              onPress={handleLeaveTeam}
-              disabled={busy}
-            >
-              <Text style={styles.leaveButtonText}>Leave Team</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Join Team Form */}
-        {!currentTeam && (
+        {/* Join Team Form - Leave team is only in Profile */}
+        {!currentTeam ? (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Join a Team</Text>
             <Text style={styles.cardSubtitle}>
@@ -202,6 +149,13 @@ export default function PlayerJoinTeam() {
                 <Text style={styles.joinButtonText}>Join Team</Text>
               )}
             </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.currentTeamCard}>
+            <Text style={styles.currentTeamTitle}>Current Team</Text>
+            <Text style={styles.currentTeamName}>{currentTeam.team_name}</Text>
+            <Text style={styles.currentTeamClub}>{currentTeam.club_name}</Text>
+            <Text style={styles.currentTeamHint}>To leave the team, go to Profile and use “Leave team”.</Text>
           </View>
         )}
 
@@ -257,7 +211,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     color: "#64748b",
-    marginBottom: 20,
+    marginBottom: 12,
+  },
+  currentTeamHint: {
+    fontSize: 13,
+    color: "#64748b",
+    textAlign: "center",
   },
   leaveButton: {
     backgroundColor: "#ef4444",

@@ -1,6 +1,6 @@
 // app/profile.jsx - User profile page showing team code
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform, Alert } from "react-native";
 import { router } from "expo-router";
 import AppLayout from "../components/AppLayout";
 import { API, ngrokHeaders } from "../lib/config";
@@ -11,6 +11,7 @@ export default function Profile() {
   const [user, setUser] = useState(null);
   const [team, setTeam] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [leaving, setLeaving] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -45,6 +46,46 @@ export default function Profile() {
   const handleLogout = async () => {
     await clearToken();
     router.replace("/");
+  };
+
+  const handleLeaveTeam = async () => {
+    if (!team || user?.role !== "player") return;
+    Alert.alert(
+      "Leave team",
+      "Are you sure you want to leave this team? You can rejoin later with the team code.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Leave team",
+          style: "destructive",
+          onPress: async () => {
+            setLeaving(true);
+            try {
+              const res = await fetch(`${API}/players/leave-team/`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                  ...ngrokHeaders(),
+                },
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) {
+                alert(data?.detail || "Failed to leave team.");
+                return;
+              }
+              setTeam(null);
+              // Go to home (team stats landing); they will see join CTA and no stats until they rejoin
+              router.replace("/home");
+            } catch (err) {
+              alert("Network error.");
+            } finally {
+              setLeaving(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading || !token) {
@@ -139,6 +180,22 @@ export default function Profile() {
                       <Text style={styles.teamCodeInfoItem}>• Access their individual performance stats</Text>
                     </View>
                   </View>
+                </View>
+              )}
+
+              {/* Leave team - only for players, only when in a team */}
+              {user?.role === "player" && (
+                <View style={styles.leaveTeamSection}>
+                  <TouchableOpacity
+                    style={[styles.leaveTeamButton, leaving && styles.leaveTeamButtonDisabled]}
+                    onPress={handleLeaveTeam}
+                    disabled={leaving}
+                  >
+                    <Text style={styles.leaveTeamButtonText}>
+                      {leaving ? "Leaving…" : "Leave team"}
+                    </Text>
+                  </TouchableOpacity>
+                  <Text style={styles.leaveTeamHint}>You can rejoin later with the team code.</Text>
                 </View>
               )}
             </View>
@@ -327,6 +384,30 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: "#4b5563",
     lineHeight: 20,
+  },
+  leaveTeamSection: {
+    marginTop: 24,
+    paddingTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
+  },
+  leaveTeamButton: {
+    backgroundColor: "#dc2626",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  leaveTeamButtonDisabled: { opacity: 0.6 },
+  leaveTeamButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  leaveTeamHint: {
+    marginTop: 10,
+    fontSize: 12,
+    color: "#6b7280",
+    textAlign: "center",
   },
   logoutCard: {
     backgroundColor: "#ffffff",

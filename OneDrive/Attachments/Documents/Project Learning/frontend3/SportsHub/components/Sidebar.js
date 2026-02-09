@@ -31,9 +31,9 @@ const ANALYST_NAV_ITEMS = [
   { path: "/profile", label: "Profile", roles: ["manager", "analyst", "player"] },
 ];
 
-// Player section navigation
+// Player section navigation — landing = home (team stats); only Personal Stats + Profile in nav
 const PLAYER_NAV_ITEMS = [
-  { path: "/player/stats", label: "My Stats", roles: ["player"] },
+  { path: "/player/stats", label: "Personal Stats", roles: ["player"] },
   { path: "/profile", label: "Profile", roles: ["player"] },
 ];
 
@@ -100,7 +100,6 @@ export default function Sidebar({ userRole = "manager", onClose = null }) {
     if (path === "/analyst/dashboard") return pathname === "/analyst/dashboard" || pathname?.startsWith("/analyst/");
     if (path === "/analyst/record-events") return pathname === "/analyst/record-events" || pathname?.includes("/analyst/match/");
     if (path === "/analyst/review-matches") return pathname === "/analyst/review-matches";
-    if (path === "/player/dashboard") return pathname === "/player/dashboard";
     if (path === "/player/stats") return pathname === "/player/stats";
     if (path === "/profile") return pathname === "/profile";
     if (path === "/manager/messages") return pathname === "/manager/messages";

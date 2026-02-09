@@ -49,27 +49,24 @@ export default function Home() {
     })();
   }, []);
 
-  // Reload team performance when season filter changes
+  // Reload team performance when season filter changes (any role with a team)
   useEffect(() => {
-    if (!token) return;
+    if (!token || !team) return;
     (async () => {
       try {
-        const userRole = user?.role || "analyst";
-        if (userRole === "manager" || userRole === "analyst") {
-          const seasonParam = selectedSeason ? `?season=${encodeURIComponent(selectedSeason)}` : "";
-          const perfRes = await fetch(`${API}/teams/performance-stats/${seasonParam}`, {
-            headers: { Authorization: `Bearer ${token}`, ...ngrokHeaders() },
-          });
-          const perfData = await perfRes.json().catch(() => ({}));
-          if (perfRes.ok) {
-            setTeamPerformance(perfData);
-          }
+        const seasonParam = selectedSeason ? `?season=${encodeURIComponent(selectedSeason)}` : "";
+        const perfRes = await fetch(`${API}/teams/performance-stats/${seasonParam}`, {
+          headers: { Authorization: `Bearer ${token}`, ...ngrokHeaders() },
+        });
+        const perfData = await perfRes.json().catch(() => ({}));
+        if (perfRes.ok) {
+          setTeamPerformance(perfData);
         }
       } catch (e) {
         console.log("Error loading team performance:", e);
       }
     })();
-  }, [selectedSeason, token, user?.role]);
+  }, [selectedSeason, token, team]);
 
   const loadData = async (t, season = null) => {
     try {
@@ -100,9 +97,8 @@ export default function Home() {
       const seasons = [...new Set(matchesArray.map(m => m.season).filter(Boolean))].sort().reverse();
       setAvailableSeasons(seasons);
 
-      // Fetch team performance stats (goals, xG, etc.) for managers and analysts
-      const userRole = meData.role || "analyst";
-      if (userRole === "manager" || userRole === "analyst") {
+      // Fetch team performance stats for anyone with a team (managers, analysts, players)
+      if (meData.team) {
         const seasonParam = season ? `?season=${encodeURIComponent(season)}` : "";
         const perfRes = await fetch(`${API}/teams/performance-stats/${seasonParam}`, {
           headers: { Authorization: `Bearer ${t}`, ...ngrokHeaders() },
@@ -399,7 +395,24 @@ export default function Home() {
             }),
           }}
         >
-          {/* Season Filter - always show so it works on iPhone (Picker needs visible container; iOS needs itemStyle) */}
+          {/* Player with no team: only show join CTA — no stats until assigned to a team */}
+          {isPlayer && !team && (
+            <TouchableOpacity
+              style={styles.joinTeamPromptCard}
+              onPress={() => router.push("/player/join-team")}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.joinTeamPromptTitle}>Join a team</Text>
+              <Text style={styles.joinTeamPromptSubtitle}>
+                Ask your manager for the team code, then enter it here to join and view team and personal stats.
+              </Text>
+              <Text style={styles.joinTeamPromptButton}>Enter team code →</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Season Filter + Team Overview + Charts — only when user has a team */}
+          {team && (
+          <>
           <View style={styles.filterCard}>
             <View style={styles.filterHeader}>
               <Text style={styles.filterLabel}>Filter by Season</Text>
@@ -426,9 +439,8 @@ export default function Home() {
           </View>
 
           {/* Team Overview Card */}
-          {team && (
-            <View style={styles.overviewCard}>
-              <View style={styles.overviewHeader}>
+          <View style={styles.overviewCard}>
+            <View style={styles.overviewHeader}>
                 <View style={styles.teamHeaderRow}>
                   <View style={styles.teamInfoContainer}>
                     <Text style={styles.teamName}>{team.team_name}</Text>
@@ -463,7 +475,7 @@ export default function Home() {
                   <Text style={styles.metricValue}>{totalGoalsConceded}</Text>
                   <Text style={styles.metricLabel}>Goals Conceded</Text>
                 </View>
-                {(isManager || isAnalyst) && teamPerformance && (
+                {teamPerformance && (
                   <>
                     <View style={styles.metricCard}>
                       <Text style={styles.metricValue}>{winRate}%</Text>
@@ -500,7 +512,6 @@ export default function Home() {
                 </View>
               )}
             </View>
-          )}
 
           {/* Performance Charts */}
           <View style={styles.chartsContainer}>
@@ -672,6 +683,9 @@ export default function Home() {
             </View>
           </View>
 
+          </>
+          )}
+
           <View style={{ height: 24 }} />
         </ScrollView>
       </View>
@@ -757,6 +771,35 @@ const styles = StyleSheet.create({
         minHeight: "100%",
       },
     }),
+  },
+  joinTeamPromptCard: {
+    backgroundColor: "#059669",
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 20,
+    shadowColor: "#059669",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  joinTeamPromptTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#ffffff",
+    marginBottom: 8,
+  },
+  joinTeamPromptSubtitle: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.9)",
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  joinTeamPromptButton: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#ffffff",
+    letterSpacing: 0.3,
   },
   overviewCard: {
     backgroundColor: "#ffffff",

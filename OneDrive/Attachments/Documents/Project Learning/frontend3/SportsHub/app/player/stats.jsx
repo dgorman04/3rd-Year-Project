@@ -1,6 +1,6 @@
 // app/player/stats.jsx - Personal stats: same view as manager's player detail (for logged-in player only)
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Dimensions, Platform } from "react-native";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Dimensions, Platform, TouchableOpacity } from "react-native";
 import { router } from "expo-router";
 import AppLayout from "../../components/AppLayout";
 import PitchVisualization from "../../components/PitchVisualization";
@@ -313,10 +313,20 @@ export default function PlayerStats() {
     return (
       <AppLayout>
         <View style={styles.container}>
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>Join a team to see your personal stats.</Text>
-            <Text style={styles.errorSubtext}>Use the join-team flow from the player area.</Text>
-          </View>
+          <ScrollView contentContainerStyle={styles.joinCtaContent}>
+            <View style={styles.joinCtaCard}>
+              <Text style={styles.joinCtaTitle}>Join a team to view your personal stats</Text>
+              <Text style={styles.joinCtaDescription}>
+                Click here to join a team and view stats. Just ask your manager for the code.
+              </Text>
+              <TouchableOpacity
+                style={styles.joinCtaButton}
+                onPress={() => router.push("/player/join-team")}
+              >
+                <Text style={styles.joinCtaButtonText}>Join team</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </View>
       </AppLayout>
     );
@@ -538,6 +548,26 @@ const styles = StyleSheet.create({
   errorContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40 },
   errorText: { fontSize: 16, fontWeight: "600", color: "#0f172a", textAlign: "center" },
   errorSubtext: { marginTop: 8, fontSize: 14, color: "#64748b", textAlign: "center" },
+  joinCtaContent: { padding: 24, flex: 1 },
+  joinCtaCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 28,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  joinCtaTitle: { fontSize: 20, fontWeight: "800", color: "#0f172a", marginBottom: 10 },
+  joinCtaDescription: { fontSize: 14, color: "#64748b", lineHeight: 22, marginBottom: 20 },
+  joinCtaButton: {
+    backgroundColor: "#0f172a",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  joinCtaButtonText: { color: "#ffffff", fontSize: 16, fontWeight: "800" },
   headerCard: {
     backgroundColor: "#ffffff",
     borderRadius: 12,
