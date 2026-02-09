@@ -9,6 +9,7 @@ const HOME_NAV_ITEMS = [
   { path: "/manager/dashboard", label: "Manager Section", roles: ["manager", "analyst"] },
   { path: "/analyst/dashboard", label: "Analyst Section", roles: ["manager", "analyst"] },
   { path: "/player/stats", label: "Personal Stats", roles: ["player"] },
+  { path: "/player/messages", label: "Team Chat", roles: ["player"] },
   { path: "/profile", label: "Profile", roles: ["manager", "analyst", "player"] },
 ];
 
@@ -101,6 +102,7 @@ export default function Sidebar({ userRole = "manager", onClose = null }) {
     if (path === "/analyst/record-events") return pathname === "/analyst/record-events" || pathname?.includes("/analyst/match/");
     if (path === "/analyst/review-matches") return pathname === "/analyst/review-matches";
     if (path === "/player/stats") return pathname === "/player/stats";
+    if (path === "/player/messages") return pathname === "/player/messages";
     if (path === "/profile") return pathname === "/profile";
     if (path === "/manager/messages") return pathname === "/manager/messages";
     if (path === "/analyst/messages") return pathname === "/analyst/messages";

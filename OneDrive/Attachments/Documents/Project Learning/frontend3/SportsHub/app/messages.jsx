@@ -23,6 +23,8 @@ export default function Messages() {
         const role = res.ok ? (data.role || "manager") : "manager";
         if (role === "analyst") {
           router.replace("/analyst/messages");
+        } else if (role === "player") {
+          router.replace("/player/messages");
         } else {
           router.replace("/manager/messages");
         }

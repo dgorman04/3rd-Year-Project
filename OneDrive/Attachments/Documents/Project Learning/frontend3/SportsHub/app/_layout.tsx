@@ -34,6 +34,7 @@ export default function RootLayout() {
       <Stack.Screen name="player/dashboard" />
       <Stack.Screen name="player/join-team" />
       <Stack.Screen name="player/stats" />
+      <Stack.Screen name="player/messages" />
       <Stack.Screen name="player/team-stats" />
 
       {/* Common Routes */}
