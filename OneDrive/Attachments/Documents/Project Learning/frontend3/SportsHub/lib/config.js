@@ -1,11 +1,11 @@
 // lib/config.js
-// API URL is read from .env (in this SportsHub folder).
+// API + WebSocket URLs are read from .env (in this SportsHub folder).
 //
-// Use ngrok: set EXPO_PUBLIC_API_BASE to your ngrok URL (e.g. https://xxxx.ngrok-free.app).
-// This is used for both web and mobile. Run: ngrok http 8000
-// Then stop Expo and run "npx expo start" again after changing .env.
+// Typical production setup (e.g. Railway):
+//   EXPO_PUBLIC_API_BASE=https://your-backend.up.railway.app
+//   EXPO_PUBLIC_WS_URL=wss://your-ws-service.up.railway.app
 //
-// Optional: EXPO_PUBLIC_WS_URL for websockets (e.g. wss://xxxx.ngrok-free.app)
+// For local development you can omit these and it will fall back to localhost.
 
 const IS_WEB = typeof window !== "undefined";
 const IS_LOCAL_WEB =
@@ -13,8 +13,7 @@ const IS_LOCAL_WEB =
   (window.location.hostname === "localhost" ||
     window.location.hostname === "127.0.0.1");
 
-// Use ngrok (or EXPO_PUBLIC_API_BASE) everywhere when set — the only way it works
-// for phone and often for web. Only fall back to localhost when no API base is set.
+// Prefer EXPO_PUBLIC_API_BASE when set; otherwise use localhost (good for dev).
 const API_BASE =
   process.env.EXPO_PUBLIC_API_BASE ||
   process.env.EXPO_PUBLIC_API_BASE_WEB ||
@@ -31,9 +30,10 @@ if (__DEV__) {
   console.log("Full API URL:", API);
 }
 
+// Legacy helper kept for compatibility with existing code.
+// Currently returns an empty object and has no effect on requests.
 export function ngrokHeaders() {
-  // Safe to always include; only matters when using ngrok.
-  return { "ngrok-skip-browser-warning": "true" };
+  return {};
 }
 
 /**

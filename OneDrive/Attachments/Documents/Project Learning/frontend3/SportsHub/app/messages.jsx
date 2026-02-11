@@ -20,7 +20,7 @@ export default function Messages() {
           headers: { Authorization: `Bearer ${t}`, ...ngrokHeaders() },
         });
         const data = await res.json().catch(() => ({}));
-        const role = res.ok ? (data.role || "manager") : "manager";
+        const role = (res.ok ? (data.role || "manager") : "manager").toString().toLowerCase();
         if (role === "analyst") {
           router.replace("/analyst/messages");
         } else if (role === "player") {

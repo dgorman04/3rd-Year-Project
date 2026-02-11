@@ -6,7 +6,7 @@ import { Picker } from "@react-native-picker/picker";
 import { BarChart, LineChart, PieChart } from "react-native-chart-kit";
 import AppLayout from "../components/AppLayout";
 import PitchVisualization from "../components/PitchVisualization";
-import { API, ngrokHeaders } from "../lib/config";
+import { API } from "../lib/config";
 import { getToken, clearToken } from "../lib/auth";
 
 const screenW = Dimensions.get("window").width;
@@ -56,7 +56,7 @@ export default function Home() {
       try {
         const seasonParam = selectedSeason ? `?season=${encodeURIComponent(selectedSeason)}` : "";
         const perfRes = await fetch(`${API}/teams/performance-stats/${seasonParam}`, {
-          headers: { Authorization: `Bearer ${token}`, ...ngrokHeaders() },
+          headers: { Authorization: `Bearer ${token}` },
         });
         const perfData = await perfRes.json().catch(() => ({}));
         if (perfRes.ok) {
@@ -75,7 +75,7 @@ export default function Home() {
 
       // Fetch user profile
       const meRes = await fetch(`${API}/auth/me/`, {
-        headers: { Authorization: `Bearer ${t}`, ...ngrokHeaders() },
+        headers: { Authorization: `Bearer ${t}` },
       });
       const meData = await meRes.json().catch(() => ({}));
       if (meRes.ok) {
@@ -87,7 +87,7 @@ export default function Home() {
 
       // Fetch matches
       const matchesRes = await fetch(`${API}/matches/`, {
-        headers: { Authorization: `Bearer ${t}`, ...ngrokHeaders() },
+        headers: { Authorization: `Bearer ${t}` },
       });
       const matchesData = await matchesRes.json().catch(() => ({}));
       const matchesArray = Array.isArray(matchesData) ? matchesData : [];
@@ -101,7 +101,7 @@ export default function Home() {
       if (meData.team) {
         const seasonParam = season ? `?season=${encodeURIComponent(season)}` : "";
         const perfRes = await fetch(`${API}/teams/performance-stats/${seasonParam}`, {
-          headers: { Authorization: `Bearer ${t}`, ...ngrokHeaders() },
+          headers: { Authorization: `Bearer ${t}` },
         });
         const perfData = await perfRes.json().catch(() => ({}));
         if (perfRes.ok) {

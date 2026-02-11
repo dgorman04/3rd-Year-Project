@@ -4,16 +4,15 @@ import { View, Text, StyleSheet, TouchableOpacity, Platform } from "react-native
 import { usePathname, useRouter } from "expo-router";
 
 // Home page navigation (simplified)
-// Team Chat intentionally NOT here – it should be entered from Manager/Analyst sections only
 const HOME_NAV_ITEMS = [
   { path: "/manager/dashboard", label: "Manager Section", roles: ["manager", "analyst"] },
   { path: "/analyst/dashboard", label: "Analyst Section", roles: ["manager", "analyst"] },
   { path: "/player/stats", label: "Personal Stats", roles: ["player"] },
-  { path: "/player/messages", label: "Team Chat", roles: ["player"] },
+  { path: "/messages", label: "Team Chat", roles: ["manager", "analyst", "player"] },
   { path: "/profile", label: "Profile", roles: ["manager", "analyst", "player"] },
 ];
 
-// Manager section navigation (detailed)
+// Manager section navigation (detailed) — use /manager/messages so navbar stays manager
 const MANAGER_NAV_ITEMS = [
   { path: "/manager/dashboard", label: "Manager Dashboard", roles: ["manager"] },
   { path: "/manager/current-match", label: "Live Match", roles: ["manager"] },
@@ -23,7 +22,7 @@ const MANAGER_NAV_ITEMS = [
   { path: "/profile", label: "Profile", roles: ["manager", "analyst", "player"] },
 ];
 
-// Analyst section navigation (detailed)
+// Analyst section navigation (detailed) — use /analyst/messages so navbar stays analyst
 const ANALYST_NAV_ITEMS = [
   { path: "/analyst/dashboard", label: "Analyst Dashboard", roles: ["analyst"] },
   { path: "/analyst/record-events", label: "Start New Match", roles: ["analyst"] },
@@ -32,9 +31,10 @@ const ANALYST_NAV_ITEMS = [
   { path: "/profile", label: "Profile", roles: ["manager", "analyst", "player"] },
 ];
 
-// Player section navigation — landing = home (team stats); only Personal Stats + Profile in nav
+// Player section navigation — Personal Stats, Team Chat, Profile (so Team Chat visible on stats/profile too)
 const PLAYER_NAV_ITEMS = [
   { path: "/player/stats", label: "Personal Stats", roles: ["player"] },
+  { path: "/messages", label: "Team Chat", roles: ["player"] },
   { path: "/profile", label: "Profile", roles: ["player"] },
 ];
 
@@ -102,11 +102,11 @@ export default function Sidebar({ userRole = "manager", onClose = null }) {
     if (path === "/analyst/record-events") return pathname === "/analyst/record-events" || pathname?.includes("/analyst/match/");
     if (path === "/analyst/review-matches") return pathname === "/analyst/review-matches";
     if (path === "/player/stats") return pathname === "/player/stats";
-    if (path === "/player/messages") return pathname === "/player/messages";
     if (path === "/profile") return pathname === "/profile";
     if (path === "/manager/messages") return pathname === "/manager/messages";
     if (path === "/analyst/messages") return pathname === "/analyst/messages";
-    if (path === "/messages") return pathname === "/messages";
+    if (path === "/player/messages") return pathname === "/player/messages";
+    if (path === "/messages") return pathname === "/messages" || pathname === "/player/messages";
     return pathname?.startsWith(path);
   };
 
