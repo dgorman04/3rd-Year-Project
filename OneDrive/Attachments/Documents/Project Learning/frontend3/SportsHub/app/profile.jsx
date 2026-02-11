@@ -1,7 +1,8 @@
 // app/profile.jsx - User profile page showing team code
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform, Alert } from "react-native";
 import { router } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import AppLayout from "../components/AppLayout";
 import { API, ngrokHeaders } from "../lib/config";
 import { getToken, clearToken } from "../lib/auth";
@@ -24,6 +25,13 @@ export default function Profile() {
       await loadProfile(t);
     })();
   }, []);
+
+  // Refetch profile when screen is focused so e.g. after manager removes player we show no team
+  useFocusEffect(
+    useCallback(() => {
+      if (token) loadProfile(token);
+    }, [token])
+  );
 
   const loadProfile = async (t) => {
     try {
@@ -48,8 +56,51 @@ export default function Profile() {
     router.replace("/");
   };
 
-  const handleLeaveTeam = async () => {
+  // Shared leave‑team implementation
+  const performLeaveTeam = async () => {
+    setLeaving(true);
+    try {
+      const res = await fetch(`${API}/players/leave-team/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          ...ngrokHeaders(),
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data?.detail || "Failed to leave team.");
+        return;
+      }
+      setTeam(null);
+      // Go to home (team stats landing); they will see join CTA and no stats until they rejoin
+      router.replace("/home");
+    } catch (err) {
+      alert("Network error.");
+    } finally {
+      setLeaving(false);
+    }
+  };
+
+  const handleLeaveTeam = () => {
     if (!team || user?.role !== "player") return;
+
+    // On web, React Native's Alert doesn't support multi‑button
+    // dialogs reliably, so use a browser confirm instead so the
+    // "Leave team" action actually triggers.
+    if (Platform.OS === "web") {
+      const confirmed =
+        typeof window !== "undefined"
+          ? window.confirm(
+              "Are you sure you want to leave this team? You can rejoin later with the team code."
+            )
+          : true;
+      if (!confirmed) return;
+      void performLeaveTeam();
+      return;
+    }
+
     Alert.alert(
       "Leave team",
       "Are you sure you want to leave this team? You can rejoin later with the team code.",
@@ -58,30 +109,8 @@ export default function Profile() {
         {
           text: "Leave team",
           style: "destructive",
-          onPress: async () => {
-            setLeaving(true);
-            try {
-              const res = await fetch(`${API}/players/leave-team/`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${token}`,
-                  ...ngrokHeaders(),
-                },
-              });
-              const data = await res.json().catch(() => ({}));
-              if (!res.ok) {
-                alert(data?.detail || "Failed to leave team.");
-                return;
-              }
-              setTeam(null);
-              // Go to home (team stats landing); they will see join CTA and no stats until they rejoin
-              router.replace("/home");
-            } catch (err) {
-              alert("Network error.");
-            } finally {
-              setLeaving(false);
-            }
+          onPress: () => {
+            void performLeaveTeam();
           },
         },
       ]

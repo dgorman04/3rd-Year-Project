@@ -177,9 +177,53 @@ export default function ManagerPlayers() {
     );
   }
 
-  const handleRemovePlayer = async (playerId) => {
+  // Core remove logic shared between web + native
+  const performRemovePlayer = async (playerId) => {
+    setRemoving(playerId);
+    try {
+      const res = await fetch(`${API}/teams/players/${playerId}/`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}`, ...ngrokHeaders() },
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        Alert.alert("Error", json?.detail || "Failed to remove player");
+        return;
+      }
+
+      // Refresh players list
+      const pRes = await fetch(`${API}/teams/players/`, {
+        headers: { Authorization: `Bearer ${token}`, ...ngrokHeaders() },
+      });
+      if (pRes.ok) {
+        const pJson = await pRes.json().catch(() => ({}));
+        setPlayers(pJson.players || []);
+      }
+    } catch (e) {
+      console.log(e);
+      Alert.alert("Error", "Network error");
+    } finally {
+      setRemoving(null);
+    }
+  };
+
+  const handleRemovePlayer = (playerId) => {
     if (!token) return;
-    
+
+    // React Native Web's Alert ignores multiple buttons, so use
+    // a native browser confirm dialog on web to ensure the
+    // destructive action actually fires.
+    if (Platform.OS === "web") {
+      const confirmed =
+        typeof window !== "undefined"
+          ? window.confirm("Remove this player from the team?")
+          : true;
+      if (!confirmed) return;
+      void performRemovePlayer(playerId);
+      return;
+    }
+
     Alert.alert(
       "Remove Player",
       "Remove this player from the team?",
@@ -188,34 +232,8 @@ export default function ManagerPlayers() {
         {
           text: "Remove",
           style: "destructive",
-          onPress: async () => {
-            setRemoving(playerId);
-            try {
-              const res = await fetch(`${API}/teams/players/${playerId}/`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${token}`, ...ngrokHeaders() },
-              });
-
-              if (!res.ok) {
-                const json = await res.json().catch(() => ({}));
-                Alert.alert("Error", json?.detail || "Failed to remove player");
-                return;
-              }
-
-              // Refresh players list
-              const pRes = await fetch(`${API}/teams/players/`, {
-                headers: { Authorization: `Bearer ${token}`, ...ngrokHeaders() },
-              });
-              if (pRes.ok) {
-                const pJson = await pRes.json().catch(() => ({}));
-                setPlayers(pJson.players || []);
-              }
-            } catch (e) {
-              console.log(e);
-              Alert.alert("Error", "Network error");
-            } finally {
-              setRemoving(null);
-            }
+          onPress: () => {
+            void performRemovePlayer(playerId);
           },
         },
       ]

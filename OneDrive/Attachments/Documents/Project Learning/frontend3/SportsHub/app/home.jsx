@@ -1,12 +1,12 @@
 // app/home.jsx - Unified home dashboard with team overview
 import React, { useEffect, useState, useMemo } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform, Dimensions } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform, Dimensions, TextInput } from "react-native";
 import { router } from "expo-router";
 import { Picker } from "@react-native-picker/picker";
 import { BarChart, LineChart, PieChart } from "react-native-chart-kit";
 import AppLayout from "../components/AppLayout";
 import PitchVisualization from "../components/PitchVisualization";
-import { API } from "../lib/config";
+import { API, ngrokHeaders } from "../lib/config";
 import { getToken, clearToken } from "../lib/auth";
 
 const screenW = Dimensions.get("window").width;
@@ -36,6 +36,10 @@ export default function Home() {
   const [eventInstances, setEventInstances] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
+  const [joinTeamCode, setJoinTeamCode] = useState("");
+  const [joinPlayerName, setJoinPlayerName] = useState("");
+  const [joinError, setJoinError] = useState("");
+  const [joinBusy, setJoinBusy] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -284,6 +288,41 @@ export default function Home() {
     };
   }, [filteredMatches, eventInstances]);
 
+  const handleJoinTeamFromHome = async () => {
+    setJoinError("");
+    if (!joinTeamCode.trim() || !joinPlayerName.trim()) {
+      setJoinError("Team code and player name are required.");
+      return;
+    }
+    setJoinBusy(true);
+    try {
+      const res = await fetch(`${API}/players/join-team/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          ...ngrokHeaders(),
+        },
+        body: JSON.stringify({
+          team_code: joinTeamCode.trim().toUpperCase(),
+          player_name: joinPlayerName.trim(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setJoinError(data?.detail || "Failed to join team.");
+        return;
+      }
+      await loadData(token, null);
+      setJoinTeamCode("");
+      setJoinPlayerName("");
+    } catch (err) {
+      setJoinError("Network error. Please check your connection.");
+    } finally {
+      setJoinBusy(false);
+    }
+  };
+
   // Fetch event instances for filtered matches to calculate zone heatmap
   // This must come AFTER filteredMatches is defined
   useEffect(() => {
@@ -395,19 +434,49 @@ export default function Home() {
             }),
           }}
         >
-          {/* Player with no team: only show join CTA — no stats until assigned to a team */}
+          {/* Player with no team: show only join form — no dashboard until they join */}
           {isPlayer && !team && (
-            <TouchableOpacity
-              style={styles.joinTeamPromptCard}
-              onPress={() => router.push("/player/join-team")}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.joinTeamPromptTitle}>Join a team</Text>
-              <Text style={styles.joinTeamPromptSubtitle}>
-                Ask your manager for the team code, then enter it here to join and view team and personal stats.
+            <View style={styles.joinTeamCard}>
+              <Text style={styles.joinTeamTitle}>Join a team now</Text>
+              <Text style={styles.joinTeamSubtitle}>
+                Enter the team code from your manager and your player name. Once joined, team stats will appear here.
               </Text>
-              <Text style={styles.joinTeamPromptButton}>Enter team code →</Text>
-            </TouchableOpacity>
+              {joinError ? (
+                <View style={styles.joinErrorBox}>
+                  <Text style={styles.joinErrorText}>{joinError}</Text>
+                </View>
+              ) : null}
+              <View style={styles.joinInputGroup}>
+                <Text style={styles.joinLabel}>Team code</Text>
+                <TextInput
+                  placeholder="e.g. ABC123"
+                  placeholderTextColor="#9ca3af"
+                  style={styles.joinInput}
+                  value={joinTeamCode}
+                  onChangeText={(t) => setJoinTeamCode(t.toUpperCase())}
+                  autoCapitalize="characters"
+                  editable={!joinBusy}
+                />
+              </View>
+              <View style={styles.joinInputGroup}>
+                <Text style={styles.joinLabel}>Your player name</Text>
+                <TextInput
+                  placeholder="Name as on squad list"
+                  placeholderTextColor="#9ca3af"
+                  style={styles.joinInput}
+                  value={joinPlayerName}
+                  onChangeText={setJoinPlayerName}
+                  editable={!joinBusy}
+                />
+              </View>
+              <TouchableOpacity
+                style={[styles.joinSubmitButton, joinBusy && styles.joinSubmitDisabled]}
+                onPress={handleJoinTeamFromHome}
+                disabled={joinBusy}
+              >
+                <Text style={styles.joinSubmitText}>{joinBusy ? "Joining…" : "Join team & view stats"}</Text>
+              </TouchableOpacity>
+            </View>
           )}
 
           {/* Season Filter + Team Overview + Charts — only when user has a team */}
@@ -772,34 +841,79 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  joinTeamPromptCard: {
-    backgroundColor: "#059669",
+  joinTeamCard: {
+    backgroundColor: "#ffffff",
     borderRadius: 16,
-    padding: 24,
+    padding: 28,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
     shadowColor: "#059669",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.12,
     shadowRadius: 8,
     elevation: 4,
   },
-  joinTeamPromptTitle: {
-    fontSize: 20,
+  joinTeamTitle: {
+    fontSize: 22,
     fontWeight: "800",
-    color: "#ffffff",
+    color: "#0f172a",
     marginBottom: 8,
   },
-  joinTeamPromptSubtitle: {
+  joinTeamSubtitle: {
     fontSize: 14,
-    color: "rgba(255,255,255,0.9)",
-    marginBottom: 16,
+    color: "#64748b",
+    marginBottom: 20,
     lineHeight: 20,
   },
-  joinTeamPromptButton: {
-    fontSize: 15,
+  joinErrorBox: {
+    backgroundColor: "#fef2f2",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
+  joinErrorText: {
+    fontSize: 14,
+    color: "#dc2626",
+    fontWeight: "500",
+  },
+  joinInputGroup: {
+    marginBottom: 16,
+  },
+  joinLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 6,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  joinInput: {
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    backgroundColor: "#ffffff",
+    color: "#111827",
+  },
+  joinSubmitButton: {
+    backgroundColor: "#059669",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  joinSubmitDisabled: {
+    opacity: 0.7,
+  },
+  joinSubmitText: {
+    fontSize: 16,
     fontWeight: "700",
     color: "#ffffff",
-    letterSpacing: 0.3,
   },
   overviewCard: {
     backgroundColor: "#ffffff",
