@@ -1,0 +1,37 @@
+@startuml
+title StatSync - Match Lifecycle State Diagram
+
+skinparam shadowing false
+skinparam state {
+  BackgroundColor<<initial>> LightGreen
+  BackgroundColor<<final>> LightCoral
+}
+
+[*] --> not_started : Match created
+
+state not_started : **Not Started**\n----\n• Match record exists\n• No timer running\n• Analyst can configure\n• Events not yet logged
+
+not_started --> first_half : Start match\n(POST /timer/ start)
+
+state first_half : **First Half**\n----\n• Timer running\n• elapsed_seconds increments\n• Events logged & broadcast\n• Live suggestions active
+
+first_half --> half_time : End first half\n(POST /timer/ half_time)
+
+state half_time : **Half Time**\n----\n• Timer paused\n• Stats visible\n• Chat available\n• Resume when ready
+
+half_time --> second_half : Start second half\n(POST /timer/ second_half)
+
+state second_half : **Second Half**\n----\n• Timer running again\n• Events continue\n• Live suggestions active
+
+second_half --> finished : End match\n(POST /timer/ finish)
+
+state finished : **Finished**\n----\n• Timer stopped\n• xG recalculated\n• Final stats locked\n• Video review / export
+
+finished --> [*]
+
+note right of not_started
+  State stored in Match.state
+  Elapsed time in Match.elapsed_seconds
+end note
+
+@enduml

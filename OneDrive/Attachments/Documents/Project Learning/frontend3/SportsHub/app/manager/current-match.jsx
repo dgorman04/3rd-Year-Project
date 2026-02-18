@@ -1,6 +1,6 @@
 // app/manager/current-match.jsx - View current/live match stats
 import React, { useEffect, useState, useRef, useMemo } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Dimensions, Platform } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Dimensions, Platform, Alert } from "react-native";
 import { router } from "expo-router";
 import { Picker } from "@react-native-picker/picker";
 import AppLayout from "../../components/AppLayout";
@@ -178,11 +178,10 @@ export default function CurrentMatch() {
       }
 
       // Only set liveMatch if we actually have a match AND it's not null/undefined
-      // Also check that match state is actually live (first_half, second_half, or half_time)
+      // Backend uses state in_progress | paused for "current live" (see /api/matches/current-live/)
       if (data.match && data.match !== null && data.match !== undefined && data.match !== "null") {
-        // Additional check: ensure match has an id (valid match) and is in a live state
         const matchState = data.match.state || data.match.match_state;
-        const isLiveState = matchState && ["first_half", "second_half", "half_time"].includes(matchState);
+        const isLiveState = matchState && ["in_progress", "paused", "first_half", "second_half", "half_time"].includes(matchState);
         
         if (data.match.id && isLiveState) {
           setLiveMatch(data.match);
@@ -311,6 +310,51 @@ export default function CurrentMatch() {
       }
     } catch (e) {
       console.log("Error loading ML recommendations:", e);
+    }
+  };
+
+  const endLiveMatch = async () => {
+    if (!liveMatch?.id || !token) return;
+    const message = "End this match and remove it from Live? It will no longer appear as the current live match.";
+    if (Platform.OS === "web") {
+      if (!window.confirm(message)) return;
+    } else {
+      return new Promise((resolve) => {
+        Alert.alert("End live match?", message, [
+          { text: "Cancel", style: "cancel", onPress: () => resolve() },
+          { text: "End match", onPress: () => { resolve(); doEndLiveMatch(); } },
+        ]);
+      });
+    }
+    doEndLiveMatch();
+  };
+
+  const doEndLiveMatch = async () => {
+    try {
+      const res = await fetch(`${API}/matches/${liveMatch.id}/timer/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          ...ngrokHeaders(),
+        },
+        body: JSON.stringify({ action: "finish" }),
+      });
+      if (res.ok) {
+        setLiveMatch(null);
+        setLiveMatchStats([]);
+        setEventInstances([]);
+        setLiveSuggestions([]);
+        setMlPlayerRecommendations(null);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        if (Platform.OS === "web") alert(err?.detail || "Could not end match.");
+        else Alert.alert("Error", err?.detail || "Could not end match.");
+      }
+    } catch (e) {
+      console.log(e);
+      if (Platform.OS === "web") alert("Network error ending match.");
+      else Alert.alert("Error", "Network error ending match.");
     }
   };
 
@@ -1199,6 +1243,9 @@ export default function CurrentMatch() {
                 {liveMatch.season && <Text style={styles.detailText}>Season: {liveMatch.season}</Text>}
               </View>
             )}
+            <TouchableOpacity style={styles.endMatchButton} onPress={endLiveMatch}>
+              <Text style={styles.endMatchButtonText}>Match not running? End it and clear from Live</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Live xG */}
@@ -1672,6 +1719,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "400",
     color: "#6b7280",
+  },
+  endMatchButton: {
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignSelf: "center",
+    backgroundColor: "#fef2f2",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
+  endMatchButtonText: {
+    fontSize: 14,
+    color: "#b91c1c",
+    fontWeight: "500",
   },
   filterRow: {
     flexDirection: "row",

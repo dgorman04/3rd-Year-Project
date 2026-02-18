@@ -1,0 +1,34 @@
+@startuml
+title StatSync - High Level Component Overview
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+
+package "Expo Client" {
+  [UI Screens] as ui
+  [AuthContext\n(JWT Storage)] as auth
+  [API Client] as api
+  [WS Client] as ws
+}
+
+package "Backend" {
+  [Django REST API] as django
+  [Redis Publisher] as pub
+  [Node WS Server] as nodews
+}
+
+database "PostgreSQL" as pg
+queue "Redis\nPub/Sub" as redis
+
+ui --> auth
+ui --> api
+ui --> ws
+
+api --> django : REST
+django --> pg : ORM
+django --> pub
+pub --> redis : publish(events)
+redis --> nodews : subscribe(events)
+nodews --> ws : broadcast
+
+@enduml

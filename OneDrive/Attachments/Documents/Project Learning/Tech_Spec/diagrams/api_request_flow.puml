@@ -1,0 +1,38 @@
+@startuml
+title StatSync - Typical API Request Flow (with Caching & Validation)
+
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+
+participant "Expo Client" as Client
+participant "Django Middleware" as MW
+participant "View + Permissions" as View
+participant "Serializer" as Ser
+database "PostgreSQL" as PG
+queue "Redis" as Redis
+
+Client -> MW : HTTP Request\nAuthorization: Bearer <JWT>
+MW -> MW : CORS / Security headers\n(no JWT check here)
+
+MW -> View : Route to view
+View -> View : **Permission checks**\nIsAuthenticated?\nRole allowed?\nTeam/match access?
+
+alt Permission denied
+    View --> Client : 401 / 403
+else Allowed
+    View -> Ser : Parse request body (if POST/PATCH)
+    Ser -> Ser : Validate input\n(required fields, types, constraints)
+
+    alt Validation error
+        Ser --> Client : 400 Bad Request\n{ field: [errors] }
+    else Valid
+        View -> PG : ORM queries\n(create/update/select)
+        PG --> View : Result set
+        View -> View : Business logic\n(e.g. xG recalc, event publish)
+        View -> Redis : Publish (if real-time event)
+        View -> Ser : Serialize response
+        Ser --> Client : 200/201 + JSON
+    end
+end
+
+@enduml

@@ -1,0 +1,45 @@
+@startuml
+title StatSync - Authentication Sequence (Login & Token Refresh)
+
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+
+actor User
+participant "Expo Client" as Client
+participant "Django REST API\n(simplejwt)" as Django
+database "PostgreSQL" as PG
+
+== Login ==
+User -> Client : Enter email + password
+Client -> Django : POST /api/auth/login/\n{ email, password }
+
+Django -> PG : Validate credentials\n(User lookup + password check)
+
+alt Invalid credentials
+    Django --> Client : 401 Unauthorized
+else Valid credentials
+    Django -> Django : Load Profile (role, team_id)\nBuild JWT payload (email, role, team_id)
+    Django -> Django : Issue access_token (short-lived)\nIssue refresh_token (long-lived)
+    Django --> Client : 200 OK\n{ access, refresh, user: { email, role, team_id } }
+    Client -> Client : Store tokens in AsyncStorage\nSet Authorization header for future requests
+end
+
+== Token Refresh (when access token expires) ==
+Client -> Django : POST /api/auth/refresh/\n{ refresh: <refresh_token> }
+
+Django -> Django : Validate refresh token (signature, expiry)
+alt Invalid or expired refresh
+    Django --> Client : 401 Unauthorized\n(Redirect to login)
+else Valid
+    Django -> Django : Issue new access_token
+    Django --> Client : 200 OK\n{ access: <new_access_token> }
+    Client -> Client : Replace stored access token
+end
+
+== Authenticated Request ==
+Client -> Django : GET /api/auth/me/\nAuthorization: Bearer <access_token>
+Django -> Django : Verify JWT signature & expiry\nDecode payload (no DB lookup)
+Django -> PG : Optional: fetch latest Profile/User if needed
+Django --> Client : 200 OK\n{ user profile data }
+
+@enduml

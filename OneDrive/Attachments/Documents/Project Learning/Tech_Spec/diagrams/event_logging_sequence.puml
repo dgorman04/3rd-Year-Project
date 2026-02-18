@@ -1,0 +1,21 @@
+@startuml
+title StatSync - Event Logging Sequence
+
+actor Manager
+participant "Expo Client" as Client
+participant "Django REST API" as Django
+database "PostgreSQL" as PG
+queue "Redis" as Redis
+participant "Node WS Server" as NodeWS
+participant "Connected Clients" as Clients
+
+Manager -> Client : Select player + event
+Client -> Django : POST increment endpoint (JWT)
+Django -> PG : Update PlayerEventStat
+Django -> PG : Insert PlayerEventInstance
+Django -> Redis : Publish match_event
+Redis -> NodeWS : Deliver message
+NodeWS -> Clients : Broadcast via WebSocket
+Clients -> Clients : Update UI
+
+@enduml

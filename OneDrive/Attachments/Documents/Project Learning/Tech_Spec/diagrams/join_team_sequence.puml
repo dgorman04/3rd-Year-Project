@@ -1,0 +1,43 @@
+@startuml
+title StatSync - Join Team Sequence
+
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+
+actor "Authenticated Player" as Player
+participant "Expo Client\n(React Native)" as Client
+participant "Django REST API\n(JWT Protected)" as Django
+database "PostgreSQL" as PG
+
+Player -> Client : Enter team_code + player_name
+Client -> Django : POST /api/players/join-team/\nAuthorization: Bearer <JWT>\n{ team_code, player_name }
+
+Django -> Django : Validate JWT\nEnsure role == "player"
+
+alt Invalid token or incorrect role
+    Django --> Client : 401 / 403 Error
+else Valid request
+
+    Django -> PG : SELECT Team\nWHERE team_code = ?
+
+    alt Team not found
+        Django --> Client : 400 Bad Request\n"Invalid team code"
+    else Team exists
+
+        Django -> Django : Begin database transaction
+
+        Django -> PG : SELECT Player\nWHERE (team_id, name)
+
+        alt Player already exists
+            Django -> PG : UPDATE Profile\nSET team_id, player_id
+        else Player does not exist
+            Django -> PG : INSERT Player(team_id, name)
+            Django -> PG : UPDATE Profile\nSET team_id, player_id
+        end
+
+        Django -> Django : Commit transaction
+        Django --> Client : 200 OK\n(Return updated profile summary)
+    end
+end
+
+@enduml

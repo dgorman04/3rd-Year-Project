@@ -1,0 +1,51 @@
+@startuml
+title StatSync - Security Architecture & Trust Boundaries
+
+skinparam shadowing false
+skinparam componentStyle rectangle
+
+rectangle "Untrusted Zone\n(Client Device)" as untrusted #LightYellow {
+  component "Expo App" as expo
+  component "AsyncStorage\n(JWT storage)" as storage
+  component "WebSocket Client" as ws
+}
+
+rectangle "Trust Boundary\n(HTTPS / WSS)" as boundary #White
+
+rectangle "Trusted Zone\n(Backend)" as trusted #LightGreen {
+  component "Django API\n(JWT validation)" as django
+  component "Permission Checks\n(Role + Team)" as perms
+  component "Node WS Server\n(no auth*)" as nodews
+  database "PostgreSQL" as pg
+  queue "Redis" as redis
+}
+
+expo --> storage : Read/write tokens
+expo --> django : HTTPS + Bearer JWT
+expo --> ws : WSS connection
+storage ..> expo : Tokens never sent to 3rd party
+
+boundary -[hidden]right- untrusted
+boundary -[hidden]right- trusted
+
+django --> perms : Every request
+perms --> pg : Team/role lookup if needed
+django --> redis : Publish (internal)
+redis --> nodews : Subscribe
+nodews --> ws : Broadcast
+
+note bottom of nodews
+  * WebSocket connections
+  are not authenticated
+  (documented limitation)
+end note
+
+note right of perms
+  • IsAuthenticated
+  • Role checks (manager/
+    analyst/player)
+  • Team membership
+  • Match ownership
+end note
+
+@enduml

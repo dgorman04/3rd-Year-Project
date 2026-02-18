@@ -1,0 +1,33 @@
+@startuml
+title StatSync - Real-Time Chat Sequence
+
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+
+actor "Authenticated User\n(Manager / Player)" as User
+participant "Expo Client\n(React Native)" as Client
+participant "Django REST API\n(JWT Protected)" as Django
+database "PostgreSQL" as PG
+queue "Redis\n(pub/sub channel: events)" as Redis
+participant "Node.js WebSocket Server" as NodeWS
+participant "Connected Team Clients" as Others
+
+User -> Client : Compose + send message
+Client -> Django : POST /api/chat/messages/\nAuthorization: Bearer <JWT>\n{ message, match_id? }
+
+Django -> Django : Validate JWT\nValidate team membership\nValidate role permissions
+
+alt Invalid token or not team member
+    Django --> Client : 401 / 403 Error
+else Valid request
+    Django -> PG : INSERT ChatMessage\n(team_id, match_id?, sender_user_id,\nsender_role, message, timestamp)
+
+    Django -> Redis : PUBLISH "events"\n{\n  kind: "chat",\n  team_id,\n  match_id?,\n  sender,\n  message,\n  created_at\n}
+
+    Redis -> NodeWS : Deliver message
+    NodeWS -> Others : Broadcast via WebSocket\n(JSON payload)
+
+    Others -> Others : Filter by team_id\nAppend to chat UI
+end
+
+@enduml

@@ -1,0 +1,26 @@
+@startuml
+title StatSync - Deployment Architecture
+
+skinparam shadowing false
+skinparam componentStyle rectangle
+
+node "Client Device" as client {
+  component "Expo App\n(React Native + Web)" as expo
+  component "WebSocket Client" as wsclient
+}
+
+node "Backend Services" as backend {
+  component "Django REST API" as django
+  component "Node WebSocket Server" as nodews
+}
+
+database "PostgreSQL\n(Production DB)" as pg
+queue "Redis\n(Pub/Sub)" as redis
+
+expo --> django : HTTPS (REST)\n/api/*
+wsclient --> nodews : WS/WSS\nRealtime updates
+django --> pg : SQL via ORM
+django --> redis : PUBLISH\nchannel: events
+redis --> nodews : SUBSCRIBE\nchannel: events
+
+@enduml

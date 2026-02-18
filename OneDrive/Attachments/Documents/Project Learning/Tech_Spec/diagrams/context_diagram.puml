@@ -1,0 +1,34 @@
+@startuml
+title StatSync - System Context (C4 Level 1)
+
+skinparam shadowing false
+skinparam rectangle {
+  roundCorner 20
+}
+
+actor "Manager" as manager
+actor "Player" as player
+
+rectangle "StatSync\nFootball Analytics Platform" as system {
+  rectangle "Mobile & Web Client\n(Expo / React Native)" as client
+  rectangle "REST API & Business Logic\n(Django)" as api
+  rectangle "Real-Time Updates\n(Node.js + Redis)" as realtime
+  rectangle "Data Storage\n(PostgreSQL)" as db
+}
+
+manager --> client : Dashboards, event logging,\nvideo upload, analytics, chat
+player --> client : Views own stats,\nteam chat
+
+client --> api : HTTPS\nREST (JSON)
+client --> realtime : WebSocket\nLive stats & chat
+api --> db : SQL (ORM)
+api --> realtime : Publish events
+
+note right of system
+  External users interact only
+  with the client. All data
+  flows through API or
+  WebSocket services.
+end note
+
+@enduml
