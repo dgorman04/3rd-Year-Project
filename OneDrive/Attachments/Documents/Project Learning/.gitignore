@@ -48,3 +48,6 @@ build/
 *.env
 !*.env.example
 backend/db.sqlite3
+
+## Local uploads (production uses S3)
+backend/media/
