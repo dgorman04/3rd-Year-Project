@@ -1339,7 +1339,7 @@ export default function ManagerDashboard() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#f8fafc",
   },
   webHeader: {
     padding: 24,
@@ -1347,6 +1347,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
     borderBottomWidth: 1,
     borderBottomColor: "#e5e7eb",
+    ...Platform.select({
+      web: { borderLeftWidth: 4, borderLeftColor: "#1e40af" },
+      default: {},
+    }),
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",

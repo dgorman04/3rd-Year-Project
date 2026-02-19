@@ -177,6 +177,7 @@ export default function AnalystMatchReview() {
   const [matchPerformanceSuggestions, setMatchPerformanceSuggestions] = useState(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [heatmapFilter, setHeatmapFilter] = useState("attacking"); // "attacking" | "defensive"
+  const [playbackUrl, setPlaybackUrl] = useState(null);
 
   const load = async (t) => {
     try {
@@ -204,6 +205,18 @@ export default function AnalystMatchReview() {
       
       console.log("Match loaded:", mJson.id, "Has recording:", mJson.has_recording, "Recording URL:", mJson.recording_url);
       setMatch(mJson);
+      setPlaybackUrl(null);
+      if (mJson.has_recording && mJson.id) {
+        try {
+          const pRes = await fetch(`${API}/matches/${matchId}/recording/playback-url/`, {
+            headers: { Authorization: `Bearer ${t}`, ...ngrokHeaders() },
+          });
+          if (pRes.ok) {
+            const pJson = await pRes.json().catch(() => ({}));
+            if (pJson.url) setPlaybackUrl(pJson.url);
+          }
+        } catch (_) {}
+      }
 
       // 2) match stats
       const sRes = await fetch(`${API}/matches/${matchId}/stats/`, {
@@ -263,7 +276,6 @@ export default function AnalystMatchReview() {
     try {
       setUploadingVideo(true);
       
-      // Pick video file
       const result = await DocumentPicker.getDocumentAsync({
         type: Platform.OS === "web" ? ["video/*"] : ["video/mp4", "video/quicktime", "video/x-msvideo"],
         copyToCacheDirectory: true,
@@ -281,18 +293,17 @@ export default function AnalystMatchReview() {
         setUploadingVideo(false);
         return;
       }
-      
-      // Create FormData
+
+      const authHeaders = { Authorization: `Bearer ${token}`, ...ngrokHeaders() };
+
+      // Web: upload via backend only (no direct S3 = no S3 CORS issues). Backend saves to S3 when configured.
+      // Native: upload via backend (same path).
       const formData = new FormData();
-      
-      // For web, we need to convert the file
       if (Platform.OS === "web") {
-        // Fetch the file as blob
         const response = await fetch(file.uri);
         const blob = await response.blob();
         formData.append("file", blob, file.name || "video.mp4");
       } else {
-        // For native, use the file URI directly with proper format
         formData.append("file", {
           uri: file.uri,
           type: file.mimeType || "video/mp4",
@@ -300,16 +311,9 @@ export default function AnalystMatchReview() {
         });
       }
       
-      // Upload to backend
-      const headers = {
-        Authorization: `Bearer ${token}`,
-        ...ngrokHeaders(),
-      };
-      
-      // Don't set Content-Type for FormData - let the browser/native set it with boundary
       const uploadRes = await fetch(`${API}/matches/${matchId}/video/`, {
         method: "POST",
-        headers: headers,
+        headers: authHeaders,
         body: formData,
       });
       
@@ -322,22 +326,15 @@ export default function AnalystMatchReview() {
         return;
       }
       
-      console.log("Video upload response:", uploadData);
-      
-      // Reload match data to get updated recording URL
+      if (uploadData.recording_stream_url) setPlaybackUrl(uploadData.recording_stream_url);
       await load(token);
-      
-      // Check if video was successfully uploaded
-      if (uploadData.recording_url || uploadData.video_url) {
+      if (uploadData.recording_url || uploadData.video_url || uploadData.recording_stream_url) {
         const recordingUrl = uploadData.recording_url || uploadData.video_url;
-        setMatch(prev => ({
-          ...prev,
-          has_recording: true,
-          recording_url: recordingUrl,
-        }));
+        const streamUrl = uploadData.recording_stream_url;
+        setMatch(prev => ({ ...prev, has_recording: true, recording_url: recordingUrl, recording_stream_url: streamUrl }));
+        if (streamUrl) setPlaybackUrl(streamUrl);
         alert("Video uploaded successfully!");
       } else {
-        // If no URL in response, check the reloaded match data
         alert("Video upload completed. Refreshing match data...");
       }
     } catch (e) {
@@ -1082,7 +1079,7 @@ export default function AnalystMatchReview() {
                           selectedTimestamp === event.second && styles.timelineItemSelected
                         ]}
                         onPress={() => {
-                          if (match.has_recording && match.recording_url) {
+                          if (match.has_recording && (playbackUrl || match.recording_stream_url || match.recording_url)) {
                             const sec = event.second != null ? Number(event.second) : 0;
                             setSelectedTimestamp(sec);
                             videoPlayerRef.current?.seekTo?.(sec);
@@ -1093,7 +1090,7 @@ export default function AnalystMatchReview() {
                       >
                         <View style={styles.timelineTime}>
                           <Text style={styles.timelineTimeText}>{formatTime(event.second)}</Text>
-                          {match.has_recording && match.recording_url && (
+                          {match.has_recording && (playbackUrl || match.recording_stream_url || match.recording_url) && (
                             <Text style={styles.timelineJumpText}>Jump →</Text>
                           )}
                         </View>
@@ -1116,18 +1113,18 @@ export default function AnalystMatchReview() {
               <View style={styles.sectionHeader}>
                 <Text style={styles.cardTitle}>Match Recording</Text>
                 <Text style={styles.cardSubtitle}>
-                  {match.has_recording && match.recording_url 
+                  {match.has_recording && (playbackUrl || match.recording_stream_url || match.recording_url) 
                     ? "Video playback with event navigation" 
                     : "Upload a video to review match events"}
                 </Text>
               </View>
               
-              {match.has_recording && match.recording_url ? (
+              {match.has_recording && (playbackUrl || match.recording_stream_url || match.recording_url) ? (
                 <VideoPlayer 
                   ref={videoPlayerRef}
-                  videoUrl={normalizeRecordingUrl(match.recording_url)} 
+                  videoUrl={normalizeRecordingUrl(playbackUrl || match.recording_stream_url || match.recording_url)} 
                   currentTime={selectedTimestamp}
-                  key={normalizeRecordingUrl(match.recording_url)}
+                  key={normalizeRecordingUrl(playbackUrl || match.recording_stream_url || match.recording_url)}
                 />
               ) : (
                 <View style={styles.uploadContainer}>
@@ -1151,7 +1148,7 @@ export default function AnalystMatchReview() {
                 </View>
               )}
               
-              {match.has_recording && match.recording_url && (
+              {match.has_recording && (playbackUrl || match.recording_stream_url || match.recording_url) && (
                 <TouchableOpacity
                   style={styles.replaceVideoButton}
                   onPress={uploadVideo}

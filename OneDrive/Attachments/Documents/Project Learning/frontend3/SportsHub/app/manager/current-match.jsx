@@ -42,11 +42,11 @@ const chartConfig = {
 };
 
 const EVENT_TYPES = [
-  { id: "passes", label: "Passes", icon: "⚽", color: "#3b82f6" },
-  { id: "shots", label: "Shots", icon: "🎯", color: "#ef4444" },
-  { id: "tackles", label: "Tackles", icon: "🛡️", color: "#f59e0b" },
-  { id: "dribbles", label: "Dribbles", icon: "🏃", color: "#8b5cf6" },
-  { id: "crosses", label: "Crosses", icon: "↗️", color: "#ec4899" },
+  { id: "passes", label: "Passes", color: "#3b82f6" },
+  { id: "shots", label: "Shots", color: "#ef4444" },
+  { id: "tackles", label: "Tackles", color: "#f59e0b" },
+  { id: "dribbles", label: "Dribbles", color: "#8b5cf6" },
+  { id: "crosses", label: "Crosses", color: "#ec4899" },
 ];
 
 export default function CurrentMatch() {
@@ -61,6 +61,7 @@ export default function CurrentMatch() {
   const [liveHeatmapFilter, setLiveHeatmapFilter] = useState("duels"); // "duels", "attacking", "defensive"
   const [liveSuggestions, setLiveSuggestions] = useState([]);
   const [teamName, setTeamName] = useState(null);
+  const [displayElapsedSeconds, setDisplayElapsedSeconds] = useState(0);
   const wsRef = useRef(null);
   const liveMatchPollRef = useRef(null);
   const shouldPollRef = useRef(false);
@@ -118,23 +119,21 @@ export default function CurrentMatch() {
       }
       return;
     }
-    
+
     // Only start polling if we have a valid token AND token is loaded
     shouldPollRef.current = true;
-    
+
     const pollLiveMatch = async () => {
-      // Multiple safety checks - stop immediately if any condition fails
       if (!shouldPollRef.current || !tokenLoaded || !token || token === null || token === "" || liveMatchPollRef.current === null) {
         return;
       }
       const t = token;
       await loadLiveMatch(t);
     };
-    
-    // ONLY start polling if ALL conditions are met
+
     if (tokenLoaded && token && token !== null && token !== "") {
       pollLiveMatch();
-      liveMatchPollRef.current = setInterval(pollLiveMatch, 5000);
+      liveMatchPollRef.current = setInterval(pollLiveMatch, 2000);
     }
 
     return () => {
@@ -145,6 +144,34 @@ export default function CurrentMatch() {
       }
     };
   }, [token, tokenLoaded]);
+
+  const isMatchRunning = liveMatch && (liveMatch.state === "first_half" || liveMatch.state === "second_half");
+  const hasSeededRunningRef = useRef(false);
+
+  // Only when paused/finished: show time from API. Never touch display while running.
+  useEffect(() => {
+    if (!liveMatch) return;
+    if (liveMatch.state === "paused" || liveMatch.state === "finished") {
+      const apiElapsed = liveMatch.elapsed_seconds != null ? Math.floor(Number(liveMatch.elapsed_seconds)) : 0;
+      setDisplayElapsedSeconds(apiElapsed);
+    }
+  }, [liveMatch?.state, liveMatch?.elapsed_seconds]);
+
+  // When running: seed once (by match id) then only the interval updates. No deps on elapsed_seconds so poll never resets us to 0.
+  useEffect(() => {
+    if (!isMatchRunning) {
+      hasSeededRunningRef.current = false;
+      return;
+    }
+    const matchId = liveMatch?.id;
+    if (matchId != null && !hasSeededRunningRef.current) {
+      hasSeededRunningRef.current = true;
+      const seed = liveMatch.elapsed_seconds != null ? Math.floor(Number(liveMatch.elapsed_seconds)) : 0;
+      setDisplayElapsedSeconds(seed);
+    }
+    const interval = setInterval(() => setDisplayElapsedSeconds((p) => p + 1), 1000);
+    return () => clearInterval(interval);
+  }, [isMatchRunning, liveMatch?.id]);
 
   const loadLiveMatch = async (t) => {
     try {
@@ -1237,6 +1264,15 @@ export default function CurrentMatch() {
                 <Text style={styles.score}>{liveMatch.goals_conceded || 0}</Text>
               </View>
             </View>
+            {/* Live match timer (read-only – analyst controls it) */}
+            <View style={styles.timerDisplay}>
+              <Text style={styles.timerTime}>
+                {String(Math.floor(displayElapsedSeconds / 60)).padStart(2, "0")}:{String(displayElapsedSeconds % 60).padStart(2, "0")}
+              </Text>
+              <Text style={styles.timerState}>
+                {(liveMatch.state === "paused" || liveMatch.match_state === "paused") ? "Paused" : (liveMatch.state === "first_half" || liveMatch.match_state === "first_half") ? "1st Half" : (liveMatch.state === "second_half" || liveMatch.match_state === "second_half") ? "2nd Half" : (liveMatch.state === "in_progress" || liveMatch.match_state === "in_progress") ? "Live" : (liveMatch.state === "finished" || liveMatch.match_state === "finished") ? "Finished" : "Live"}
+              </Text>
+            </View>
             {liveMatch.formation && (
               <View style={styles.matchDetails}>
                 <Text style={styles.detailText}>Formation: {liveMatch.formation}</Text>
@@ -1719,6 +1755,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "400",
     color: "#6b7280",
+  },
+  timerDisplay: {
+    alignItems: "center",
+    marginVertical: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
+  },
+  timerTime: {
+    fontSize: 28,
+    fontWeight: "600",
+    color: "#111827",
+    fontFamily: Platform.OS === "web" ? "monospace" : undefined,
+  },
+  timerState: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#6b7280",
+    marginTop: 4,
   },
   endMatchButton: {
     marginTop: 12,

@@ -1,118 +1,18 @@
-// components/Sidebar.js - Modern navigation sidebar inspired by professional sports analytics apps
+// components/Sidebar.js - Modern navigation sidebar (uses shared navConfig)
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from "react-native";
 import { usePathname, useRouter } from "expo-router";
+import { getNavItems, isNavActive } from "../lib/navConfig";
 
-// Home page navigation (simplified)
-const HOME_NAV_ITEMS = [
-  { path: "/manager/dashboard", label: "Manager Section", roles: ["manager", "analyst"] },
-  { path: "/analyst/dashboard", label: "Analyst Section", roles: ["manager", "analyst"] },
-  { path: "/player/stats", label: "Personal Stats", roles: ["player"] },
-  { path: "/messages", label: "Team Chat", roles: ["manager", "analyst", "player"] },
-  { path: "/profile", label: "Profile", roles: ["manager", "analyst", "player"] },
-];
-
-// Manager section navigation (detailed) — use /manager/messages so navbar stays manager
-const MANAGER_NAV_ITEMS = [
-  { path: "/manager/dashboard", label: "Manager Dashboard", roles: ["manager"] },
-  { path: "/manager/current-match", label: "Live Match", roles: ["manager"] },
-  { path: "/manager/players", label: "Players", roles: ["manager"] },
-  { path: "/manager/matches", label: "Matches", roles: ["manager"] },
-  { path: "/manager/messages", label: "Team Chat", roles: ["manager", "analyst", "player"] },
-  { path: "/profile", label: "Profile", roles: ["manager", "analyst", "player"] },
-];
-
-// Analyst section navigation (detailed) — use /analyst/messages so navbar stays analyst
-const ANALYST_NAV_ITEMS = [
-  { path: "/analyst/dashboard", label: "Analyst Dashboard", roles: ["analyst"] },
-  { path: "/analyst/record-events", label: "Start New Match", roles: ["analyst"] },
-  { path: "/analyst/review-matches", label: "Review Matches", roles: ["analyst"] },
-  { path: "/analyst/messages", label: "Team Chat", roles: ["manager", "analyst", "player"] },
-  { path: "/profile", label: "Profile", roles: ["manager", "analyst", "player"] },
-];
-
-// Player section navigation — Personal Stats, Team Chat, Profile (so Team Chat visible on stats/profile too)
-const PLAYER_NAV_ITEMS = [
-  { path: "/player/stats", label: "Personal Stats", roles: ["player"] },
-  { path: "/messages", label: "Team Chat", roles: ["player"] },
-  { path: "/profile", label: "Profile", roles: ["player"] },
-];
-
-export default function Sidebar({ userRole = "manager", onClose = null }) {
+export default function Sidebar({ userRole = "manager", onClose = null, topOffset = 0 }) {
   const router = useRouter();
   const pathname = usePathname();
-
-  // Determine which navigation set to use based on current path
-  const isHomePage = pathname === "/home";
-  const isManagerSection = pathname?.startsWith("/manager/");
-  const isAnalystSection = pathname?.startsWith("/analyst/");
-  const isPlayerSection = pathname?.startsWith("/player/");
-
-  let navItemsToUse = HOME_NAV_ITEMS; // Default to home navigation
-  let usingManagerNav = false;
-  let usingAnalystNav = false;
-  let usingPlayerNav = false;
-
-  if (isManagerSection) {
-    navItemsToUse = MANAGER_NAV_ITEMS;
-    usingManagerNav = true;
-  } else if (isAnalystSection) {
-    navItemsToUse = ANALYST_NAV_ITEMS;
-    usingAnalystNav = true;
-  } else if (isPlayerSection) {
-    navItemsToUse = PLAYER_NAV_ITEMS;
-    usingPlayerNav = true;
-  } else if (pathname === "/messages") {
-    // Legacy /messages: show nav by user role so sidebar is consistent
-    if (userRole === "manager") {
-      navItemsToUse = MANAGER_NAV_ITEMS;
-      usingManagerNav = true;
-    } else if (userRole === "analyst") {
-      navItemsToUse = ANALYST_NAV_ITEMS;
-      usingAnalystNav = true;
-    } else {
-      navItemsToUse = HOME_NAV_ITEMS;
-    }
-  } else if (isHomePage) {
-    navItemsToUse = HOME_NAV_ITEMS;
-  }
-
-  // Filter nav items based on role
-  // For manager/analyst/player sections we always show the full section navbar,
-  // regardless of underlying role, so the section feels self-contained.
-  const filteredItems = navItemsToUse.filter((item) => {
-    if (usingManagerNav || usingAnalystNav || usingPlayerNav) {
-      return true;
-    }
-
-    if (item.roles) {
-      return item.roles.includes(userRole);
-    }
-    // Fallback to old logic for backwards compatibility
-    if (item.path.includes("/manager/") && userRole !== "manager") return false;
-    if (item.path.includes("/analyst/") && userRole !== "analyst") return false;
-    if (item.path.includes("/player/") && userRole !== "player") return false;
-    return true;
-  });
-
-  const isActive = (path) => {
-    if (path === "/home") return pathname === "/home";
-    if (path === "/manager/dashboard") return pathname === "/manager/dashboard" || pathname?.startsWith("/manager/");
-    if (path === "/analyst/dashboard") return pathname === "/analyst/dashboard" || pathname?.startsWith("/analyst/");
-    if (path === "/analyst/record-events") return pathname === "/analyst/record-events" || pathname?.includes("/analyst/match/");
-    if (path === "/analyst/review-matches") return pathname === "/analyst/review-matches";
-    if (path === "/player/stats") return pathname === "/player/stats";
-    if (path === "/profile") return pathname === "/profile";
-    if (path === "/manager/messages") return pathname === "/manager/messages";
-    if (path === "/analyst/messages") return pathname === "/analyst/messages";
-    if (path === "/player/messages") return pathname === "/player/messages";
-    if (path === "/messages") return pathname === "/messages" || pathname === "/player/messages";
-    return pathname?.startsWith(path);
-  };
+  const filteredItems = getNavItems(pathname, userRole);
+  const isActive = (path) => isNavActive(path, pathname);
 
   return (
-    <View style={styles.sidebar}>
-      <View style={styles.header}>
+    <View style={[styles.sidebar, topOffset > 0 && { paddingTop: topOffset }]}>
+      <View style={[styles.header, topOffset > 0 && styles.headerWithOffset]}>
         <TouchableOpacity 
           onPress={() => {
             router.push("/home");
@@ -174,6 +74,9 @@ const styles = StyleSheet.create({
     borderBottomColor: "#e5e7eb",
     backgroundColor: "#0a0e27",
   },
+  headerWithOffset: {
+    paddingTop: 20,
+  },
   logoContainer: {
     alignItems: "center",
     width: "100%",
@@ -205,11 +108,15 @@ const styles = StyleSheet.create({
   },
   navItemActive: {
     backgroundColor: "#eff6ff",
+    borderLeftWidth: 3,
+    borderLeftColor: "#1e40af",
+    marginLeft: 9,
+    paddingLeft: 17,
   },
   navLabel: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#374151",
+    color: "#4b5563",
     letterSpacing: 0.2,
   },
   navLabelActive: {

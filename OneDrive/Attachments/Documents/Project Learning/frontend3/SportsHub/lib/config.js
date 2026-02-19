@@ -37,17 +37,39 @@ export function ngrokHeaders() {
 }
 
 /**
- * Normalize recording URL so the video is always loaded from the same host as the API.
- * Fixes DEMUXER_ERROR when backend returns localhost but the app is opened via ngrok.
+ * Normalize recording URL so the video is always loaded from a valid host.
+ *
+ * - If the backend returns a relative path (e.g. `/media/...`), we prepend the API base.
+ * - If the URL already points at S3 (or another cloud storage host), we keep it as-is so
+ *   the browser can stream directly from cloud.
+ * - For other mismatched origins (e.g. localhost vs ngrok), we rewrite to the API origin.
  */
 export function normalizeRecordingUrl(recordingUrl) {
   if (!recordingUrl || typeof recordingUrl !== "string") return null;
   const base = API_BASE.replace(/\/$/, "");
+
+  // Relative path from backend – serve via the API host.
   if (recordingUrl.startsWith("/")) return `${base}${recordingUrl}`;
+
   try {
-    const baseOrigin = new URL(API_BASE).origin;
     const url = new URL(recordingUrl);
-    if (url.origin !== baseOrigin) return `${baseOrigin}${url.pathname}${url.search}`;
+    const baseOrigin = new URL(API_BASE).origin;
+    const host = url.hostname || "";
+
+    // S3 / cloud storage hosts should not be rewritten.
+    const isS3Like =
+      host.includes("s3.") ||
+      host.endsWith(".amazonaws.com");
+
+    if (isS3Like) {
+      return recordingUrl;
+    }
+
+    // For non-S3 URLs on a different origin, normalize to the API origin.
+    if (url.origin !== baseOrigin) {
+      return `${baseOrigin}${url.pathname}${url.search}`;
+    }
   } catch (_) {}
+
   return recordingUrl;
 }

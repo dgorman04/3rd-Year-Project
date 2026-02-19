@@ -28,14 +28,11 @@ describe("config", () => {
     expect(normalizeRecordingUrl(undefined)).toBeNull();
   });
 
-  test("normalizeRecordingUrl returns same URL when string passed", () => {
-    const { normalizeRecordingUrl, API_BASE_URL } = require("../../lib/config");
-    const url = "https://example.com/media/recording.mp4";
+  test("normalizeRecordingUrl keeps S3 URLs", () => {
+    const { normalizeRecordingUrl } = require("../../lib/config");
+    const url = "https://stato-recording.s3.eu-north-1.amazonaws.com/media/recording.mp4";
     const result = normalizeRecordingUrl(url);
-    expect(typeof result).toBe("string");
-    // When URL is on a different origin, it should be normalized to the API base origin
-    expect(result).toContain("/media/recording.mp4");
-    expect(result.startsWith(API_BASE_URL)).toBe(true);
+    expect(result).toBe(url);
   });
 
   test("normalizeRecordingUrl prepends base to path-only URL", () => {

@@ -88,7 +88,7 @@ export default function AnalystDashboard() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#f8fafc",
   },
   webHeader: {
     padding: 24,
@@ -96,6 +96,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
     borderBottomWidth: 1,
     borderBottomColor: "#e5e7eb",
+    ...Platform.select({
+      web: { borderLeftWidth: 4, borderLeftColor: "#1e40af" },
+      default: {},
+    }),
   },
   webTitle: {
     fontSize: 28,
@@ -118,11 +122,13 @@ const styles = StyleSheet.create({
     padding: 24,
     borderWidth: 1,
     borderColor: "#e5e7eb",
+    borderLeftWidth: 4,
+    borderLeftColor: "#1e40af",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.06,
     shadowRadius: 8,
-    elevation: 2,
+    elevation: 3,
   },
   welcomeTitle: {
     fontSize: 24,

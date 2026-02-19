@@ -480,42 +480,46 @@ export default function PlayerProfile() {
 
   return (
     <AppLayout>
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Player Header */}
-        <View style={styles.headerCard}>
-          <Text style={styles.playerName}>{player?.name || "Player"}</Text>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Hero Header */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroInner}>
+            <Text style={styles.playerName}>{player?.name || "Player"}</Text>
+            <Text style={styles.heroSubtitle}>Player Profile</Text>
+          </View>
           <View style={styles.ratingBadge}>
-            <Text style={styles.ratingLabel}>Overall Rating</Text>
+            <Text style={styles.ratingLabel}>Rating</Text>
             <Text style={styles.ratingValue}>{playerKPIs.rating.toFixed(1)}</Text>
+            <Text style={styles.ratingOutOf}>/ 10</Text>
           </View>
         </View>
 
-        {/* KPI Cards */}
+        {/* KPI Cards - each with accent color */}
         <View style={styles.kpiRow}>
-          <View style={styles.kpiCard}>
+          <View style={[styles.kpiCard, styles.kpiGoals]}>
             <Text style={styles.kpiValue}>{playerKPIs.goals}</Text>
             <Text style={styles.kpiTitle}>Goals</Text>
           </View>
-          <View style={styles.kpiCard}>
+          <View style={[styles.kpiCard, styles.kpiXG]}>
             <Text style={styles.kpiValue}>{playerKPIs.xg.toFixed(2)}</Text>
-            <Text style={styles.kpiTitle}>Expected Goals</Text>
+            <Text style={styles.kpiTitle}>xG</Text>
           </View>
-          <View style={styles.kpiCard}>
+          <View style={[styles.kpiCard, styles.kpiPasses]}>
             <Text style={styles.kpiValue}>{playerKPIs.keyPasses}</Text>
             <Text style={styles.kpiTitle}>Key Passes</Text>
           </View>
         </View>
 
         <View style={styles.kpiRow}>
-          <View style={styles.kpiCard}>
+          <View style={[styles.kpiCard, styles.kpiDuels]}>
             <Text style={styles.kpiValue}>{playerKPIs.duelsWon}</Text>
             <Text style={styles.kpiTitle}>Duels Won</Text>
           </View>
-          <View style={styles.kpiCard}>
+          <View style={[styles.kpiCard, styles.kpiTackles]}>
             <Text style={styles.kpiValue}>{playerKPIs.tackles}</Text>
             <Text style={styles.kpiTitle}>Tackles</Text>
           </View>
-          <View style={styles.kpiCard}>
+          <View style={[styles.kpiCard, styles.kpiInterceptions]}>
             <Text style={styles.kpiValue}>{playerKPIs.interceptions}</Text>
             <Text style={styles.kpiTitle}>Interceptions</Text>
           </View>
@@ -538,7 +542,7 @@ export default function PlayerProfile() {
                 }),
                 datasets: [{
                   data: ratingProgression.map(r => r.rating),
-                  color: (opacity = 1) => `rgba(15, 23, 42, ${opacity})`,
+                  color: (opacity = 1) => `rgba(30, 64, 175, ${opacity})`,
                   strokeWidth: 3,
                 }],
               }}
@@ -546,24 +550,24 @@ export default function PlayerProfile() {
               height={280}
               chartConfig={{
                 backgroundColor: "#ffffff",
-                backgroundGradientFrom: "#f8f9fa",
+                backgroundGradientFrom: "#eff6ff",
                 backgroundGradientTo: "#ffffff",
                 decimalPlaces: 1,
-                color: (opacity = 1) => `rgba(15, 23, 42, ${opacity})`,
+                color: (opacity = 1) => `rgba(30, 64, 175, ${opacity})`,
                 labelColor: (opacity = 1) => `rgba(100, 116, 139, ${opacity})`,
                 propsForDots: {
                   r: "6",
                   strokeWidth: "3",
                   stroke: "#ffffff",
-                  fill: "#0f172a",
+                  fill: "#1e40af",
                 },
                 propsForBackgroundLines: {
                   stroke: "#e2e8f0",
                   strokeWidth: 1,
                   strokeDasharray: "0",
                 },
-                fillShadowGradient: "#0f172a",
-                fillShadowGradientOpacity: 0.1,
+                fillShadowGradient: "#1e40af",
+                fillShadowGradientOpacity: 0.15,
               }}
               bezier
               withInnerLines={false}
@@ -611,13 +615,13 @@ export default function PlayerProfile() {
           <View style={styles.card}>
             <View style={styles.sectionHeader}>
               <Text style={styles.cardTitle}>Zone-Based Performance Insights</Text>
-              <Text style={styles.cardSubtitle}>AI-powered analysis of your positioning and activity patterns</Text>
+              <Text style={styles.cardSubtitle}>Analysis of positioning and activity patterns</Text>
             </View>
             <View style={styles.recommendationsList}>
               {zoneSuggestions.map((suggestion, idx) => (
-                <View key={idx} style={styles.recommendationItem}>
+                <View key={idx} style={[styles.recommendationItem, suggestion.category === "Attacking" && styles.recItemAttacking, suggestion.category === "Defensive" && styles.recItemDefensive, suggestion.category === "Positioning" && styles.recItemPositioning]}>
                   <View style={styles.recommendationHeader}>
-                    <View style={styles.recommendationCategory}>
+                    <View style={[styles.recommendationCategory, suggestion.category === "Attacking" && styles.recCatAttacking, suggestion.category === "Defensive" && styles.recCatDefensive, suggestion.category === "Positioning" && styles.recCatPositioning]}>
                       <Text style={styles.recommendationCategoryText}>{suggestion.category}</Text>
                     </View>
                     <Text style={styles.recTitle}>{suggestion.title}</Text>
@@ -764,11 +768,12 @@ export default function PlayerProfile() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8f9fa",
+    backgroundColor: "#f8fafc",
   },
   content: {
-    padding: 28,
+    padding: 20,
     paddingBottom: 40,
+    backgroundColor: "#f8fafc",
   },
   loadingContainer: {
     flex: 1,
@@ -782,40 +787,67 @@ const styles = StyleSheet.create({
     color: "#64748b",
     fontWeight: "500",
   },
-  headerCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
+  heroCard: {
+    backgroundColor: "#0f172a",
+    borderRadius: 20,
     padding: 28,
     marginBottom: 24,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#1e3a8a",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 6,
   },
+  heroInner: {},
   playerName: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: "800",
-    color: "#0f172a",
+    color: "#ffffff",
     letterSpacing: -0.5,
+    marginBottom: 4,
   },
-  ratingBadge: {
-    alignItems: "flex-end",
-  },
-  ratingLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#64748b",
+  heroSubtitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#93c5fd",
     textTransform: "uppercase",
     letterSpacing: 1,
-    marginBottom: 6,
+  },
+  ratingBadge: {
+    backgroundColor: "#1e40af",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: "center",
+    minWidth: 88,
+    borderWidth: 1,
+    borderColor: "#3b82f6",
+  },
+  ratingLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#93c5fd",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: 4,
   },
   ratingValue: {
-    fontSize: 42,
+    fontSize: 36,
     fontWeight: "800",
-    color: "#0f172a",
+    color: "#ffffff",
     letterSpacing: -1.5,
-    marginBottom: 8,
+  },
+  ratingOutOf: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#93c5fd",
+    marginTop: 2,
   },
   ratingNote: {
     maxWidth: 200,
@@ -830,65 +862,80 @@ const styles = StyleSheet.create({
   },
   kpiRow: {
     flexDirection: "row",
-    gap: 16,
-    marginBottom: 16,
+    gap: 14,
+    marginBottom: 14,
     flexWrap: "wrap",
   },
   kpiCard: {
     flex: 1,
-    minWidth: 140,
+    minWidth: 100,
     backgroundColor: "#ffffff",
     borderRadius: 16,
-    padding: 28,
+    padding: 20,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: "#e5e7eb",
     alignItems: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.06,
     shadowRadius: 8,
-    elevation: 2,
+    elevation: 3,
+    borderTopWidth: 4,
   },
+  kpiGoals: { borderTopColor: "#059669" },
+  kpiXG: { borderTopColor: "#1e40af" },
+  kpiPasses: { borderTopColor: "#3b82f6" },
+  kpiDuels: { borderTopColor: "#d97706" },
+  kpiTackles: { borderTopColor: "#ea580c" },
+  kpiInterceptions: { borderTopColor: "#7c3aed" },
   kpiValue: {
-    fontSize: 40,
+    fontSize: 32,
     fontWeight: "800",
-    color: "#0f172a",
-    marginBottom: 10,
+    color: "#111827",
+    marginBottom: 6,
     letterSpacing: -1,
   },
   kpiTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
-    color: "#64748b",
+    color: "#6b7280",
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
   card: {
     backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: 28,
+    borderRadius: 16,
+    padding: 24,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: "#e5e7eb",
+    borderLeftWidth: 4,
+    borderLeftColor: "#1e40af",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
   },
   sectionHeader: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   cardTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "700",
-    color: "#0f172a",
-    marginBottom: 6,
+    color: "#111827",
+    marginBottom: 4,
     letterSpacing: -0.3,
   },
   cardSubtitle: {
     fontSize: 14,
-    color: "#64748b",
+    color: "#6b7280",
     fontWeight: "500",
   },
   premiumChart: {
     marginTop: 12,
     borderRadius: 12,
+    overflow: "hidden",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -929,24 +976,38 @@ const styles = StyleSheet.create({
   },
   recommendationItem: {
     padding: 20,
-    backgroundColor: "#f8f9fa",
-    borderRadius: 10,
+    backgroundColor: "#f8fafc",
+    borderRadius: 12,
     marginBottom: 16,
-    borderLeftWidth: 3,
-    borderLeftColor: "#0f172a",
+    borderLeftWidth: 4,
+    borderLeftColor: "#1e40af",
   },
+  recItemAttacking: { borderLeftColor: "#059669", backgroundColor: "#f0fdf4" },
+  recItemDefensive: { borderLeftColor: "#7c3aed", backgroundColor: "#f5f3ff" },
+  recItemPositioning: { borderLeftColor: "#d97706", backgroundColor: "#fffbeb" },
   recommendationHeader: {
     marginBottom: 10,
   },
+  recommendationCategory: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: "#1e40af",
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  recCatAttacking: { backgroundColor: "#059669" },
+  recCatDefensive: { backgroundColor: "#7c3aed" },
+  recCatPositioning: { backgroundColor: "#d97706" },
   recTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#0f172a",
+    color: "#111827",
     letterSpacing: -0.2,
   },
   recMessage: {
     fontSize: 14,
-    color: "#475569",
+    color: "#4b5563",
     lineHeight: 22,
     marginBottom: 14,
   },
@@ -984,40 +1045,34 @@ const styles = StyleSheet.create({
   },
   zoneStatItem: {
     flex: 1,
-    minWidth: 140,
+    minWidth: 120,
     padding: 16,
-    backgroundColor: "#f8f9fa",
-    borderRadius: 8,
+    backgroundColor: "#eff6ff",
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: "#bfdbfe",
+    borderTopWidth: 3,
+    borderTopColor: "#3b82f6",
   },
   zoneStatLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
-    color: "#64748b",
+    color: "#1e40af",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
     marginBottom: 6,
   },
   zoneStatValue: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#0f172a",
+    color: "#111827",
     marginBottom: 4,
     letterSpacing: -0.5,
   },
   zoneStatDetail: {
     fontSize: 12,
-    color: "#64748b",
+    color: "#6b7280",
     fontWeight: "500",
-  },
-  recommendationCategory: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: "#0f172a",
-    borderRadius: 4,
-    marginBottom: 8,
   },
   recommendationCategoryText: {
     fontSize: 10,
@@ -1029,18 +1084,18 @@ const styles = StyleSheet.create({
   // ML Insights Section
   mlInsightCard: {
     backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: 24,
-    marginBottom: 20,
+    borderRadius: 14,
+    padding: 22,
+    marginBottom: 18,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderLeftWidth: 3,
-    borderLeftColor: "#0f172a",
+    borderColor: "#e5e7eb",
+    borderLeftWidth: 4,
+    borderLeftColor: "#1e40af",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
   mlInsightHeader: {
     flexDirection: "row",
@@ -1051,54 +1106,54 @@ const styles = StyleSheet.create({
   mlInsightCategory: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#64748b",
+    color: "#ffffff",
     textTransform: "uppercase",
     letterSpacing: 0.8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: "#f1f5f9",
-    borderRadius: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    backgroundColor: "#1e40af",
+    borderRadius: 6,
   },
   mlInsightPriority: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#64748b",
+    color: "#6b7280",
     textTransform: "uppercase",
     letterSpacing: 0.8,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: "#f8f9fa",
-    borderRadius: 4,
+    paddingVertical: 5,
+    backgroundColor: "#f3f4f6",
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: "#e5e7eb",
   },
   mlInsightTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#0f172a",
+    color: "#111827",
     marginBottom: 10,
     letterSpacing: -0.3,
     lineHeight: 24,
   },
   mlInsightMessage: {
     fontSize: 14,
-    color: "#475569",
+    color: "#4b5563",
     lineHeight: 22,
     marginBottom: 16,
     fontWeight: "400",
   },
   mlInsightActions: {
-    backgroundColor: "#f8f9fa",
-    borderRadius: 8,
+    backgroundColor: "#eff6ff",
+    borderRadius: 10,
     padding: 16,
     marginTop: 12,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: "#bfdbfe",
   },
   mlInsightActionsTitle: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#64748b",
+    color: "#1e40af",
     marginBottom: 12,
     textTransform: "uppercase",
     letterSpacing: 0.8,
@@ -1109,17 +1164,17 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   mlInsightActionBullet: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#0f172a",
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "#1e40af",
     marginTop: 8,
     marginRight: 12,
   },
   mlInsightActionText: {
     flex: 1,
     fontSize: 13,
-    color: "#475569",
+    color: "#4b5563",
     lineHeight: 20,
     fontWeight: "400",
   },
@@ -1127,12 +1182,12 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
+    borderTopColor: "#e5e7eb",
   },
   mlInsightExpectedText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#64748b",
+    color: "#6b7280",
     fontStyle: "italic",
   },
 });

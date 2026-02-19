@@ -128,7 +128,7 @@ export default function AnalystMatchDashboard() {
           setMatchState("not_started");
           setIsTimerRunning(false);
         }
-        setElapsedSeconds(json.elapsed_seconds || 0);
+        setElapsedSeconds((prev) => Math.max(prev, json.elapsed_seconds || 0));
         setGoalsScored(json.goals_scored || 0);
         setGoalsConceded(json.goals_conceded || 0);
       } catch (e) {
@@ -138,6 +138,14 @@ export default function AnalystMatchDashboard() {
       }
     })();
   }, [token, matchId]);
+
+  useEffect(() => {
+    if (match == null) return;
+    setElapsedSeconds((prev) => Math.max(prev, match.elapsed_seconds ?? 0));
+    if (match.state && (match.state === "not_started" || match.state === "finished")) {
+      setMatchState(match.state);
+    }
+  }, [match?.elapsed_seconds, match?.state]);
 
   useEffect(() => {
     (async () => {
@@ -366,7 +374,7 @@ export default function AnalystMatchDashboard() {
         return;
       }
 
-      setMessage(type === "scored" ? "✓ Goal scored!" : "✓ Goal conceded");
+      setMessage(type === "scored" ? "Goal scored." : "Goal conceded.");
     } catch (err) {
       console.log("Fetch error:", err);
       setMessage("Server connection failed");
@@ -450,11 +458,11 @@ export default function AnalystMatchDashboard() {
             <MatchTimer
               matchId={matchId}
               token={token}
+              elapsedSeconds={elapsedSeconds}
+              stateValue={matchState || match.state || "not_started"}
               onTimeUpdate={setElapsedSeconds}
               onStateChange={setMatchState}
               onRunningChange={setIsTimerRunning}
-              initialState={match.state || "not_started"}
-              initialElapsed={match.elapsed_seconds || 0}
             />
           </View>
         )}
@@ -615,11 +623,11 @@ export default function AnalystMatchDashboard() {
           {!!message && (
             <View style={[
               styles.messageContainer,
-              message.startsWith("✓") && styles.messageContainerSuccess
+              (message.includes("Goal scored") || message.includes("Goal conceded")) && styles.messageContainerSuccess
             ]}>
               <Text style={[
                 styles.message,
-                message.startsWith("✓") && styles.messageSuccess
+                (message.includes("Goal scored") || message.includes("Goal conceded")) && styles.messageSuccess
               ]}>
                 {message}
               </Text>

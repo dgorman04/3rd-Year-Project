@@ -1,7 +1,9 @@
-// components/AppLayout.js - Layout wrapper with collapsible sidebar
+// components/AppLayout.js - Layout wrapper with collapsible sidebar + top navbar on mobile
 import React, { useEffect, useState } from "react";
-import { View, StyleSheet, Platform, TouchableOpacity, Text, Animated, Dimensions } from "react-native";
+import { View, StyleSheet, Platform, TouchableOpacity, Text, Animated, Dimensions, StatusBar } from "react-native";
+import { useRouter } from "expo-router";
 import Sidebar from "./Sidebar";
+import TopNavBar, { TOP_BAR_HEIGHT } from "./TopNavBar";
 import { getToken } from "../lib/auth";
 import { API, ngrokHeaders } from "../lib/config";
 
@@ -12,10 +14,18 @@ const getIsMobile = () => {
   return width < 768;
 };
 
+// Extra top padding on phone so navbar sits below status bar (not flush with top)
+const TOP_INSET = Platform.select({
+  web: 0,
+  ios: 44,
+  default: StatusBar?.currentHeight ?? 28,
+});
+
 export default function AppLayout({ children, showSidebar = true }) {
+  const router = useRouter();
   const [userRole, setUserRole] = useState("manager");
-  const [isMobile, setIsMobile] = useState(getIsMobile());
-  const [sidebarOpen, setSidebarOpen] = useState(!isMobile); // Open by default on desktop, closed on mobile
+  const [isMobile, setIsMobile] = useState(getIsMobile()); // Open by default on desktop, closed on mobile
+  const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const [slideAnim] = useState(new Animated.Value(getIsMobile() ? -260 : 0));
 
   // Update mobile detection on dimension changes
@@ -75,38 +85,56 @@ export default function AppLayout({ children, showSidebar = true }) {
   if (showSidebar) {
     return (
       <View style={styles.container}>
-        {/* Hamburger Menu Button - Only on Mobile */}
+        {/* Top bar on mobile: hamburger + nav tabs */}
         {isMobile && (
-          <TouchableOpacity 
-            style={styles.menuButton} 
-            onPress={toggleSidebar}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuIcon}>
-              {!sidebarOpen ? (
-                <>
-                  <View style={styles.menuLine} />
-                  <View style={styles.menuLine} />
-                  <View style={styles.menuLine} />
-                </>
-              ) : (
-                <Text style={styles.closeIcon}>✕</Text>
-              )}
-            </View>
-          </TouchableOpacity>
+          <View style={styles.topBar}>
+            <TouchableOpacity
+              style={styles.menuButtonTop}
+              onPress={toggleSidebar}
+              activeOpacity={0.7}
+            >
+              <View style={styles.menuIcon}>
+                {!sidebarOpen ? (
+                  <>
+                    <View style={styles.menuLine} />
+                    <View style={styles.menuLine} />
+                    <View style={styles.menuLine} />
+                  </>
+                ) : (
+                  <Text style={styles.closeIcon}>✕</Text>
+                )}
+              </View>
+            </TouchableOpacity>
+            {sidebarOpen ? (
+              <TouchableOpacity
+                style={styles.homeButtonTop}
+                onPress={() => {
+                  router.push("/home");
+                  closeSidebar();
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.homeButtonText}>STATO · Home</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.topNavWrap}>
+                <TopNavBar userRole={userRole} compact />
+              </View>
+            )}
+          </View>
         )}
 
         {/* Overlay for Mobile */}
         {isMobile && sidebarOpen && (
-          <TouchableOpacity 
-            style={styles.overlay} 
+          <TouchableOpacity
+            style={styles.overlay}
             activeOpacity={1}
             onPress={closeSidebar}
           />
         )}
 
         {/* Sidebar */}
-        <Animated.View 
+        <Animated.View
           style={[
             styles.sidebarContainer,
             isMobile && {
@@ -120,14 +148,19 @@ export default function AppLayout({ children, showSidebar = true }) {
             },
           ]}
         >
-          <Sidebar userRole={userRole} onClose={isMobile ? closeSidebar : null} />
+          <Sidebar
+            userRole={userRole}
+            onClose={isMobile ? closeSidebar : null}
+            topOffset={isMobile ? TOP_BAR_HEIGHT + TOP_INSET : 0}
+          />
         </Animated.View>
 
         {/* Content */}
-        <View 
+        <View
           style={[
             styles.content,
             !isMobile && sidebarOpen && styles.contentWithSidebar,
+            isMobile && styles.contentWithTopBar,
           ]}
         >
           {children}
@@ -153,24 +186,43 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  menuButton: {
-    position: "absolute",
-    top: Platform.OS === "web" ? 20 : 50,
-    left: 16,
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: TOP_BAR_HEIGHT + TOP_INSET,
+    paddingTop: TOP_INSET,
+    backgroundColor: "#eff6ff",
+    borderBottomWidth: 3,
+    borderBottomColor: "#3b82f6",
+    paddingLeft: 4,
     zIndex: 1001,
+  },
+  menuButtonTop: {
     width: 44,
     height: 44,
-    borderRadius: 8,
-    backgroundColor: "#ffffff",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 5,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
+    backgroundColor: "#dbeafe",
+    borderRadius: 22,
+    marginRight: 4,
+  },
+  homeButtonTop: {
+    flex: 1,
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    minWidth: 0,
+  },
+  homeButtonText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1e40af",
+    letterSpacing: 0.5,
+  },
+  topNavWrap: {
+    flex: 1,
+    marginLeft: 4,
+    minWidth: 0,
   },
   menuIcon: {
     width: 24,
@@ -222,7 +274,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#f8fafc",
     ...Platform.select({
       web: {
         marginLeft: 0,
@@ -239,10 +291,12 @@ const styles = StyleSheet.create({
         marginLeft: 0,
         height: "100%",
         width: "100%",
-        // Start content below hamburger on phone (hamburger top: 50, height: 44, + gap)
-        paddingTop: 104,
+        paddingTop: 0,
       },
     }),
+  },
+  contentWithTopBar: {
+    paddingTop: TOP_BAR_HEIGHT + TOP_INSET,
   },
   contentWithSidebar: {
     ...Platform.select({

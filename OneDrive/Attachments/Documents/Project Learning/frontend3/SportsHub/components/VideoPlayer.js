@@ -136,8 +136,12 @@ const VideoPlayer = forwardRef(function VideoPlayer({ videoUrl, onSeek, currentT
     video.ontimeupdate = () => setPosition(video.currentTime);
     video.onerror = () => {
       const code = video.error?.code;
-      const msg = video.error?.message || "Failed to load video";
-      if (__DEV__ && video.error) console.warn("Video load error", code, msg, videoUrl);
+      const rawMsg = video.error?.message || "Failed to load video";
+      if (__DEV__ && video.error) console.warn("Video load error", code, rawMsg, videoUrl);
+      // Code 4 = MEDIA_ERR_SRC_NOT_SUPPORTED (often server returned JSON/404 instead of video)
+      const msg = (code === 4 || /format error|not supported/i.test(rawMsg))
+        ? "Recording unavailable. It may have been removed or the server cannot serve it."
+        : rawMsg;
       setError(msg);
     };
 

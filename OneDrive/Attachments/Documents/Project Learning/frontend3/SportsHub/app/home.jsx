@@ -765,7 +765,7 @@ export default function Home() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#f8fafc",
     width: "100%",
     ...Platform.select({
       web: {
@@ -834,6 +834,7 @@ const styles = StyleSheet.create({
     gap: 20,
     width: "100%",
     flexGrow: 1,
+    backgroundColor: "#f8fafc",
     ...Platform.select({
       web: {
         minWidth: 0,
@@ -921,11 +922,13 @@ const styles = StyleSheet.create({
     padding: 28,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.06,
     shadowRadius: 8,
-    elevation: 2,
+    elevation: 3,
     borderWidth: 1,
     borderColor: "#e5e7eb",
+    borderTopWidth: 3,
+    borderTopColor: "#1e40af",
   },
   overviewHeader: {
     marginBottom: 24,

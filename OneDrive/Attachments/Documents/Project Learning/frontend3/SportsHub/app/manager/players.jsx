@@ -167,10 +167,10 @@ export default function ManagerPlayers() {
   if (loading) {
     return (
       <AppLayout>
-        <View style={{ flex: 1, backgroundColor: "#f8f9fa" }}>
+        <View style={styles.screen}>
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#0f172a" />
-            <Text style={styles.loadingText}>Loading player data...</Text>
+            <ActivityIndicator size="large" color="#1e40af" />
+            <Text style={styles.loadingText}>Loading squad...</Text>
           </View>
         </View>
       </AppLayout>
@@ -240,33 +240,41 @@ export default function ManagerPlayers() {
     );
   };
 
+  const getRatingStyle = (rating) => {
+    if (rating >= 7) return styles.ratingBadgeHigh;
+    if (rating >= 5) return styles.ratingBadgeMid;
+    return styles.ratingBadgeLow;
+  };
+
   return (
     <AppLayout>
-      <View style={{ flex: 1, backgroundColor: "#f8f9fa" }}>
+      <View style={styles.screen}>
         {Platform.OS === "web" && (
           <View style={styles.webHeader}>
             <View style={styles.headerContent}>
-              <Text style={styles.webTitle}>Player Performance</Text>
-              <Text style={styles.webSubtitle}>Comprehensive player statistics and performance metrics</Text>
+              <Text style={styles.webTitle}>Squad</Text>
+              <Text style={styles.webSubtitle}>
+                {filteredPlayers.length} player{filteredPlayers.length !== 1 ? "s" : ""} · Tap a row to view profile
+              </Text>
             </View>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => setEditMode(!editMode)}
-              style={styles.editButton}
+              style={[styles.editButton, editMode && styles.editButtonActive]}
             >
               <Text style={styles.editButtonText}>{editMode ? "Done" : "Edit Squad"}</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle}>Squad Overview</Text>
               <View style={styles.searchContainer}>
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Search players..."
-                  placeholderTextColor="#9ca3af"
+                  placeholder="Search by name..."
+                  placeholderTextColor="#94a3b8"
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                 />
@@ -274,7 +282,9 @@ export default function ManagerPlayers() {
             </View>
             {!filteredPlayers.length ? (
               <View style={styles.emptyItem}>
-                <Text style={styles.emptyText}>No players found.</Text>
+                <Text style={styles.emptyText}>
+                  {searchQuery.trim() ? "No players match your search." : "No players in the squad yet."}
+                </Text>
               </View>
             ) : (
               <View style={styles.tableContainer}>
@@ -293,62 +303,62 @@ export default function ManagerPlayers() {
                       <Text style={[styles.tableHeaderText, styles.textCenter]}>xG</Text>
                     </View>
                     <View style={[styles.colStat, styles.headerStatCell]}>
-                      <Text style={[styles.tableHeaderText, styles.textCenter]}>Key Passes</Text>
+                      <Text style={[styles.tableHeaderText, styles.textCenter]}>Key P</Text>
                     </View>
                     <View style={[styles.colStat, styles.headerStatCell]}>
-                      <Text style={[styles.tableHeaderText, styles.textCenter]}>Duels Won</Text>
+                      <Text style={[styles.tableHeaderText, styles.textCenter]}>Duels</Text>
                     </View>
                     <View style={[styles.colStat, styles.headerStatCell]}>
-                      <Text style={[styles.tableHeaderText, styles.textCenter]}>Tackles</Text>
+                      <Text style={[styles.tableHeaderText, styles.textCenter]}>Tack</Text>
                     </View>
                     {editMode && <View style={styles.colAction} />}
                   </View>
-                  {filteredPlayers.map((p) => {
-                    // Calculate all stats for this player
+                  {filteredPlayers.map((p, index) => {
                     const playerStats = stats.filter(stat => stat.player_id === p.id);
-                    
-                    // Aggregate stats by event type
                     const aggregatedStats = {};
                     playerStats.forEach(stat => {
                       aggregatedStats[stat.event] = (aggregatedStats[stat.event] || 0) + (Number(stat.count) || 0);
                     });
-                    
-                    // Calculate rating
                     const playerRating = calculatePlayerRating(aggregatedStats);
-                    
-                    // Calculate goals from shots_on_target
                     const playerGoals = aggregatedStats.shots_on_target || 0;
-                    
-                    // Get xG from API data
                     const playerXG = xgMap[p.name] || 0;
-                    
-                    // Calculate key passes
                     const keyPasses = aggregatedStats.key_passes || 0;
-                    
-                    // Calculate duels won
                     const duelsWon = aggregatedStats.duels_won || 0;
-                    
-                    // Calculate tackles
                     const tackles = aggregatedStats.tackles || 0;
-                    
+
                     return (
                       <TouchableOpacity
                         key={p.id}
-                        style={styles.tableRow}
+                        style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlt]}
                         onPress={() => !editMode && router.push(`/manager/player/${p.id}`)}
+                        activeOpacity={editMode ? 1 : 0.7}
                         disabled={editMode}
                       >
                         <View style={[styles.playerCell, styles.colPlayer]}>
-                          <Text style={styles.playerName}>{p.name}</Text>
+                          <View style={styles.playerNameWrap}>
+                            <Text style={styles.playerName} numberOfLines={1}>{p.name}</Text>
+                          </View>
                         </View>
                         <View style={[styles.colRating, styles.ratingCell]}>
-                          <Text style={[styles.ratingText, styles.textCenter]}>{playerRating.toFixed(1)}</Text>
+                          <View style={[styles.ratingBadge, getRatingStyle(playerRating)]}>
+                            <Text style={styles.ratingText}>{playerRating.toFixed(1)}</Text>
+                          </View>
                         </View>
-                        <Text style={[styles.cellText, styles.colStat, styles.textCenter]}>{playerGoals}</Text>
-                        <Text style={[styles.cellText, styles.colStat, styles.textCenter]}>{playerXG.toFixed(1)}</Text>
-                        <Text style={[styles.cellText, styles.colStat, styles.textCenter]}>{keyPasses}</Text>
-                        <Text style={[styles.cellText, styles.colStat, styles.textCenter]}>{duelsWon}</Text>
-                        <Text style={[styles.cellText, styles.colStat, styles.textCenter]}>{tackles}</Text>
+                        <View style={[styles.colStat, styles.statCell]}>
+                          <Text style={styles.cellText}>{playerGoals}</Text>
+                        </View>
+                        <View style={[styles.colStat, styles.statCell]}>
+                          <Text style={styles.cellText}>{playerXG.toFixed(1)}</Text>
+                        </View>
+                        <View style={[styles.colStat, styles.statCell]}>
+                          <Text style={styles.cellText}>{keyPasses}</Text>
+                        </View>
+                        <View style={[styles.colStat, styles.statCell]}>
+                          <Text style={styles.cellText}>{duelsWon}</Text>
+                        </View>
+                        <View style={[styles.colStat, styles.statCell]}>
+                          <Text style={styles.cellText}>{tackles}</Text>
+                        </View>
                         {editMode && (
                           <View style={styles.colAction}>
                             <TouchableOpacity
@@ -374,6 +384,10 @@ export default function ManagerPlayers() {
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: "#f8fafc",
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
@@ -383,84 +397,100 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 15,
-    color: "#64748b",
+    color: "#6b7280",
     fontWeight: "500",
   },
   webHeader: {
-    padding: 28,
-    paddingTop: Platform.OS === "web" ? 28 : 60,
+    padding: 24,
+    paddingTop: Platform.OS === "web" ? 24 : 60,
     backgroundColor: "#ffffff",
     borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
+    borderBottomColor: "#e5e7eb",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    ...Platform.select({
+      web: { borderLeftWidth: 4, borderLeftColor: "#1e40af" },
+      default: {},
+    }),
   },
   headerContent: {
     flex: 1,
   },
   webTitle: {
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: "800",
-    color: "#0f172a",
-    marginBottom: 6,
+    color: "#111827",
+    marginBottom: 4,
     letterSpacing: -0.5,
   },
   webSubtitle: {
-    fontSize: 15,
-    fontWeight: "400",
-    color: "#64748b",
-    letterSpacing: 0.2,
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#6b7280",
   },
   editButton: {
     paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: "#0f172a",
-    borderRadius: 8,
+    paddingVertical: 12,
+    backgroundColor: "#1e40af",
+    borderRadius: 10,
+  },
+  editButtonActive: {
+    backgroundColor: "#059669",
   },
   editButtonText: {
     fontSize: 14,
     fontWeight: "600",
     color: "#ffffff",
   },
-  content: { 
-    padding: 28,
+  content: {
+    padding: 20,
     paddingBottom: 40,
   },
   card: {
     backgroundColor: "#ffffff",
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: "#e5e7eb",
+    borderLeftWidth: 4,
+    borderLeftColor: "#1e40af",
     overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 24,
-    paddingBottom: 20,
+    padding: 20,
+    paddingBottom: 18,
     borderBottomWidth: 1,
     borderBottomColor: "#f1f5f9",
+    flexWrap: "wrap",
+    gap: 12,
   },
   cardTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "700",
-    color: "#0f172a",
+    color: "#111827",
     letterSpacing: -0.3,
   },
   searchContainer: {
-    width: 280,
+    minWidth: 200,
+    maxWidth: 280,
   },
   searchInput: {
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 8,
+    borderColor: "#e5e7eb",
+    borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontSize: 14,
-    backgroundColor: "#ffffff",
-    color: "#0f172a",
+    backgroundColor: "#f8fafc",
+    color: "#111827",
   },
   tableContainer: {
     overflow: "hidden",
@@ -470,19 +500,19 @@ const styles = StyleSheet.create({
   },
   tableHeader: {
     flexDirection: "row",
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    backgroundColor: "#f8fafc",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    backgroundColor: "#eff6ff",
+    borderBottomWidth: 2,
+    borderBottomColor: "#bfdbfe",
     alignItems: "center",
   },
   tableHeaderText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#475569",
+    color: "#1e40af",
     textTransform: "uppercase",
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
   },
   headerStatCell: {
     justifyContent: "center",
@@ -491,85 +521,106 @@ const styles = StyleSheet.create({
   tableRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 18,
-    paddingHorizontal: 24,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: "#f1f5f9",
-    minHeight: 64,
+    minHeight: 60,
   },
-  // Column widths
+  tableRowAlt: {
+    backgroundColor: "#f8fafc",
+  },
   colPlayer: {
-    width: 240,
-    minWidth: 200,
+    width: 200,
+    minWidth: 140,
     ...Platform.select({
-      web: {
-        width: "auto",
-        flex: 2,
-      },
+      web: { width: "auto", flex: 2 },
     }),
   },
   colRating: {
-    width: 80,
-    minWidth: 70,
+    width: 72,
+    minWidth: 64,
     ...Platform.select({
-      web: {
-        width: "auto",
-        flex: 0.8,
-      },
+      web: { width: "auto", flex: 0.7 },
     }),
   },
   colStat: {
-    width: 90,
-    minWidth: 80,
+    width: 56,
+    minWidth: 48,
     ...Platform.select({
-      web: {
-        width: "auto",
-        flex: 1,
-      },
+      web: { width: "auto", flex: 0.6 },
     }),
   },
   colAction: {
-    width: 100,
+    width: 90,
     minWidth: 80,
     ...Platform.select({
-      web: {
-        width: "auto",
-        flex: 0.8,
-      },
+      web: { width: "auto", flex: 0.6 },
     }),
   },
   playerCell: {
     flexDirection: "row",
     alignItems: "center",
   },
+  playerNameWrap: {
+    flex: 1,
+  },
   playerName: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#0f172a",
+    color: "#111827",
     letterSpacing: -0.2,
   },
+  statCell: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
   cellText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
-    color: "#1e293b",
+    color: "#374151",
   },
   ratingCell: {
     justifyContent: "center",
+    alignItems: "center",
+  },
+  ratingBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    minWidth: 44,
+    alignItems: "center",
+  },
+  ratingBadgeHigh: {
+    backgroundColor: "#d1fae5",
+    borderWidth: 1,
+    borderColor: "#6ee7b7",
+  },
+  ratingBadgeMid: {
+    backgroundColor: "#fef3c7",
+    borderWidth: 1,
+    borderColor: "#fcd34d",
+  },
+  ratingBadgeLow: {
+    backgroundColor: "#fee2e2",
+    borderWidth: 1,
+    borderColor: "#fca5a5",
   },
   ratingText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "700",
-    color: "#0f172a",
+    color: "#111827",
   },
   textCenter: {
     textAlign: "center",
   },
   removeButton: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     backgroundColor: "#fee2e2",
-    borderRadius: 6,
-    alignSelf: "flex-start",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#fecaca",
   },
   removeText: {
     fontSize: 12,
@@ -577,12 +628,12 @@ const styles = StyleSheet.create({
     color: "#dc2626",
   },
   emptyItem: {
-    padding: 60,
+    padding: 48,
     alignItems: "center",
   },
   emptyText: {
     fontSize: 15,
-    color: "#64748b",
+    color: "#6b7280",
     fontWeight: "500",
   },
 });
